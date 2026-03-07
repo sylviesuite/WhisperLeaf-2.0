@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhisperLeaf</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, #0f1419 0%, #1a2332 40%, #0d1117 100%);
+      color: #e6edf3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .landing-owl {
+      margin-bottom: 1.25rem;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      background: transparent;
+    }
+
+    #landingOwl:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 30px rgba(120,180,255,0.35);
+    }
+
+    .landing-owl .owl-icon-wrap {
+      display: inline-block;
+      line-height: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .landing-owl .owl-icon {
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      display: block;
+      border-radius: 50%;
+    }
+
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    p { color: #8b949e; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="landing-owl" id="landingOwl" aria-hidden="true">
+    <span class="owl-icon-wrap">
+      <img src="/static/owl.png" alt="WhisperLeaf owl" class="owl-icon" />
+    </span>
+  </div>
+  <h1>WhisperLeaf</h1>
+  <p>Privacy-first local AI assistant</p>
+
+  <script>
+    const landingOwl = document.getElementById("landingOwl");
+    if (landingOwl) {
+      landingOwl.addEventListener("click", () => {
+        window.location.href = "/chat";
+      });
+    }
+  </script>
+</body>
+</html>

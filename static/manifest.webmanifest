@@ -1,0 +1,13 @@
+{
+  "name": "WhisperLeaf",
+  "short_name": "WhisperLeaf",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {"src": "/static/icons/owl192.png","sizes": "192x192","type": "image/png"},
+    {"src": "/static/icons/owl512.png","sizes": "512x512","type": "image/png"}
+  ]
+}
+
