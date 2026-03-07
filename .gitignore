@@ -1,13 +1,15 @@
+# ========================================
 # WhisperLeaf .gitignore
+# ========================================
 
-# Python
+# ---------- Python ----------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+
+# ---------- Build / Distribution ----------
 build/
-develop-eggs/
 dist/
 downloads/
 eggs/
@@ -18,13 +20,13 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual Environments
+# ---------- Virtual Environments ----------
+.venv/
 venv/
 env/
 ENV/
@@ -32,135 +34,103 @@ env.bak/
 venv.bak/
 whisperleaf_env/
 
-# IDEs
+# ---------- Environment Files ----------
+.env
+.env.*
+.envrc
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- Databases ----------
+*.db
+*.sqlite
+*.sqlite3
+
+# ---------- Cache ----------
+.cache/
+*.cache
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ---------- Test / Coverage ----------
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.nox/
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- Documentation ----------
+docs/_build/
+site/
+
+# ---------- IDE ----------
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# ---------- OS ----------
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
 Thumbs.db
+ehthumbs.db
 
-# WhisperLeaf Specific
-# Sensitive Configuration
+# ---------- Cursor ----------
+.cursor/
+.cursorignore
+.cursorindexingignore
+
+# ---------- WhisperLeaf Sensitive Config ----------
 config/.env
 config/config.yaml
 config/constitutional_rules.yaml
 
-# User Data
+# ---------- WhisperLeaf User Data ----------
 data/
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-logs/
-*.log
-
-# Backups
-backups/
-*.backup
-*.bak
-
-# Encryption Keys
-*.key
-*.pem
-*.crt
-
-# Temporary Files
-tmp/
-temp/
-.tmp/
-
-# Cache
-.cache/
-*.cache
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-
-# Documentation Build
-docs/_build/
-site/
-
-# Jupyter Notebooks
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# poetry
-poetry.lock
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# User-specific emotional data
 memories/
 emotional_data/
 personal_content/
 
-# Model files (if using local AI models)
+# ---------- WhisperLeaf Models ----------
 models/
 *.model
 *.bin
 
-# Content curation cache
+# ---------- WhisperLeaf Cache ----------
 content_cache/
 rss_cache/
 
-# System-specific
+# ---------- WhisperLeaf System ----------
 .whisperleaf/
 whisperleaf.conf
 
+# ---------- Backups ----------
+backups/
+*.backup
+*.bak
+
+# ---------- Temporary ----------
+tmp/
+temp/
+.tmp/
+
+# ---------- Keys ----------
+*.key
+*.pem
+*.crt
+
+# ---------- Misc ----------
+celerybeat-schedule
+celerybeat.pid
+.python-version
+.pypirc

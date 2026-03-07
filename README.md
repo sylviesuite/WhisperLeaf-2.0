@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # WhisperLeaf 🌿
 
 **Sovereign Emotional AI Companion**
@@ -307,3 +308,7 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 *Built with ❤️ for privacy, transparency, and human dignity*
 
+=======
+# WhisperLeaf-2.0
+Privacy-first local AI assistant designed for sovereign computing. Runs locally, protects user data, and enables independent AI interaction without cloud dependence.
+>>>>>>> dd113408d82d5f82951f6f512fc3ed2b0dd5391b
