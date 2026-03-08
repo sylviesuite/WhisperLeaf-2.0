@@ -22,6 +22,8 @@ const ChatController = {
   },
 
   cacheElements() {
+    this.els.appLayout = document.getElementById('appLayout');
+    this.els.sidebarToggle = document.getElementById('sidebarToggle');
     this.els.chatMessages = document.querySelector('.chat-window');
     this.els.chatWindow = document.getElementById('chatWindow');
     this.els.messageInput = document.getElementById('messageInput');
@@ -38,10 +40,41 @@ const ChatController = {
   initState() {
     this.state.sessionId = sessionStorage.getItem('whisperleaf_session_id') || crypto.randomUUID();
     sessionStorage.setItem('whisperleaf_session_id', this.state.sessionId);
+    const collapsed = sessionStorage.getItem('wlSidebarCollapsed') === 'true';
+    this.setSidebarCollapsed(collapsed);
+  },
+
+  setSidebarCollapsed(collapsed) {
+    const layout = this.els.appLayout;
+    const toggle = this.els.sidebarToggle;
+    if (!layout) return;
+    if (collapsed) {
+      layout.classList.add('sidebar-collapsed');
+      if (toggle) {
+        toggle.setAttribute('aria-label', 'Expand sidebar');
+        toggle.textContent = '\u00BB';
+      }
+    } else {
+      layout.classList.remove('sidebar-collapsed');
+      if (toggle) {
+        toggle.setAttribute('aria-label', 'Collapse sidebar');
+        toggle.textContent = '\u2261';
+      }
+    }
+    try {
+      sessionStorage.setItem('wlSidebarCollapsed', collapsed ? 'true' : 'false');
+    } catch (_) {}
   },
 
   bindEvents() {
-    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, chatOwl, modeButtons } = this.els;
+    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, chatOwl, modeButtons, appLayout, sidebarToggle } = this.els;
+
+    if (sidebarToggle && appLayout) {
+      sidebarToggle.addEventListener('click', () => {
+        const collapsed = appLayout.classList.contains('sidebar-collapsed');
+        this.setSidebarCollapsed(!collapsed);
+      });
+    }
 
     if (chatOwl) {
       chatOwl.addEventListener('click', () => { window.location.href = '/'; });

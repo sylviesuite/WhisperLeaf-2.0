@@ -13,11 +13,147 @@
       font-family: system-ui, -apple-system, sans-serif;
       background: linear-gradient(160deg, #0f1419 0%, #1a2332 40%, #0d1117 100%);
       color: #e6edf3;
+    }
+
+    /* Reusable glass-style surface (translucent, soft border, depth, blur where supported) */
+    .glass-surface {
+      background: rgba(17, 24, 39, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    }
+    @supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+      .glass-surface {
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+      }
+    }
+
+    /* Desktop app layout: collapsible sidebar + main */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+      transition: grid-template-columns 0.2s ease;
+    }
+
+    .app-layout.sidebar-collapsed {
+      grid-template-columns: 64px 1fr;
+    }
+
+    .app-sidebar {
+      background: rgba(17, 24, 39, 0.78);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      padding: 0.75rem 0.5rem;
+      overflow: hidden;
+    }
+
+    .sidebar-toggle {
+      align-self: flex-end;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      background: rgba(17, 24, 39, 0.6);
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+
+    .sidebar-toggle:hover {
+      color: #e6edf3;
+      background: rgba(48, 54, 61, 0.9);
+    }
+
+    .app-sidebar .sidebar-expanded-only {
+      transition: opacity 0.15s ease;
+    }
+
+    .app-layout.sidebar-collapsed .sidebar-expanded-only {
+      display: none;
+    }
+
+    .sidebar-collapsed-only {
+      display: none;
+    }
+
+    .app-layout.sidebar-collapsed .sidebar-collapsed-only {
+      display: inline;
+    }
+
+    .app-layout.sidebar-collapsed .app-sidebar .btn {
+      padding: 0.4rem;
+      min-width: 36px;
+    }
+
+    .app-sidebar .mode-toggle {
+      border-bottom: none;
+      margin-bottom: 0.75rem;
+      padding: 0;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .app-sidebar #clearBtn {
+      margin-top: auto;
+    }
+
+    .app-sidebar .chat-owl {
+      padding: 8px 0;
+    }
+
+    .app-sidebar .owl-icon {
+      width: 48px;
+      height: 48px;
+    }
+
+    .app-layout.sidebar-collapsed .app-sidebar .owl-icon {
+      width: 40px;
+      height: 40px;
+    }
+
+    .sidebar-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem 0;
+      color: #e6edf3;
+      letter-spacing: 0.02em;
+    }
+
+    .app-main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
       padding: 1rem;
+      min-width: 0;
+    }
+
+    .main-card {
+      width: 100%;
+      max-width: 800px;
+      background: rgba(17, 24, 39, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 2rem);
     }
 
     .card {
@@ -76,7 +212,7 @@
 
     .card-header {
       padding: 8px 1.25rem 8px;
-      border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       font-weight: 600;
       font-size: 1rem;
       letter-spacing: 0.02em;
@@ -198,7 +334,10 @@
       gap: 0.5rem;
       margin-top: 8px;
       padding: 1rem 1.25rem;
-      border-top: 1px solid rgba(48, 54, 61, 0.6);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(13, 17, 23, 0.4);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
     }
 
     .input-row textarea,
@@ -264,11 +403,13 @@
       padding: 0.4rem 0.75rem;
       font-size: 0.8rem;
       border-radius: 8px;
-      border: 1px solid rgba(48, 54, 61, 0.8);
-      background: rgba(22, 27, 34, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(17, 24, 39, 0.82);
       color: #c9d1d9;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
     }
 
     .btn-jump-bottom:hover {
@@ -329,9 +470,12 @@
       font-size: 0.75rem;
       color: #8b949e;
       padding: 0.6rem 0.75rem;
-      background: rgba(13, 17, 23, 0.6);
+      background: rgba(17, 24, 39, 0.65);
       border-radius: 8px;
-      border: 1px solid rgba(48, 54, 61, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
       margin-top: 0.5rem;
     }
 
@@ -365,40 +509,21 @@
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="chat-owl" aria-hidden="true">
-      <span id="chatOwl" class="owl-icon-wrap">
-        <img src="/static/owl.png" alt="WhisperLeaf" class="owl-icon" />
-      </span>
-    </div>
-    <div class="card-header">WhisperLeaf Chat</div>
-
-    <!-- Mode selector -->
-    <div class="mode-toggle">
-      <button class="mode-button active" data-mode="system">Sovereign</button>
-      <button class="mode-button" data-mode="builder">Builder</button>
-      <button class="mode-button" data-mode="structural">Structural</button>
-    </div>
-
-    <div class="chat-window">
-      <div class="messages-inner" id="chatWindow"></div>
-      <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>
-    </div>
-
-    <form id="chatForm" class="input-row" aria-label="Send message">
-      <textarea
-        id="messageInput"
-        placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-        autocomplete="off"
-        aria-label="Message"
-        rows="1"
-     ></textarea>
-      <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
-    </form>
-
-    <div class="footer">
-      <div class="status-block">
-        <span class="status">Running locally on your machine</span>
+  <div id="appLayout" class="app-layout">
+    <aside id="appSidebar" class="app-sidebar">
+      <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar">≡</button>
+      <div class="chat-owl" aria-hidden="true">
+        <span id="chatOwl" class="owl-icon-wrap">
+          <img src="/static/owl.png" alt="WhisperLeaf" class="owl-icon" />
+        </span>
+      </div>
+      <h2 class="sidebar-title sidebar-expanded-only">WhisperLeaf</h2>
+      <div class="mode-toggle sidebar-expanded-only">
+        <button class="mode-button active" data-mode="system">Sovereign</button>
+        <button class="mode-button" data-mode="builder">Builder</button>
+        <button class="mode-button" data-mode="structural">Structural</button>
+      </div>
+      <div class="status-block sidebar-expanded-only">
         <section class="mind-status" aria-label="WhisperLeaf Mind status">
           <h3>WhisperLeaf Mind</h3>
           <dl>
@@ -415,8 +540,33 @@
           </dl>
         </section>
       </div>
-      <button class="btn" id="clearBtn">Clear</button>
-    </div>
+      <div class="sidebar-footer sidebar-expanded-only">
+        <span class="status">Running locally on your machine</span>
+      </div>
+      <button type="button" class="btn" id="clearBtn" title="Clear conversation">
+        <span class="sidebar-expanded-only">Clear</span>
+        <span class="sidebar-collapsed-only" aria-hidden="true">✕</span>
+      </button>
+    </aside>
+    <main class="app-main">
+      <div class="main-card">
+        <div class="card-header">WhisperLeaf Chat</div>
+        <div class="chat-window">
+          <div class="messages-inner" id="chatWindow"></div>
+          <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>
+        </div>
+        <form id="chatForm" class="input-row" aria-label="Send message">
+          <textarea
+            id="messageInput"
+            placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+            autocomplete="off"
+            aria-label="Message"
+            rows="1"
+          ></textarea>
+          <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
+        </form>
+      </div>
+    </main>
   </div>
 
   <script src="/static/js/chat.js"></script>
