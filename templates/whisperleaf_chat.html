@@ -51,6 +51,7 @@
       align-items: center;
       padding: 0.75rem 0.5rem;
       overflow: hidden;
+      transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
     }
 
     .sidebar-toggle {
@@ -66,6 +67,7 @@
       font-size: 1rem;
       line-height: 1;
       margin-bottom: 0.5rem;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
 
     .sidebar-toggle:hover {
@@ -154,6 +156,7 @@
       display: flex;
       flex-direction: column;
       max-height: calc(100vh - 2rem);
+      transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
     }
 
     .card {
@@ -239,10 +242,7 @@
       letter-spacing: 0.03em;
       text-transform: uppercase;
       cursor: pointer;
-      transition:
-        background 0.15s ease,
-        border-color 0.15s ease,
-        color 0.15s ease;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
 
     .mode-button.active {
@@ -288,6 +288,21 @@
 
     @media (prefers-reduced-motion: reduce) {
       .message { animation: none; }
+      .app-layout { transition: none; }
+      .app-sidebar,
+      .main-card,
+      .sidebar-toggle,
+      .mode-button,
+      .input-row,
+      .input-row textarea,
+      .input-row input,
+      .btn,
+      .btn-copy-msg,
+      .btn-jump-bottom,
+      .mind-status,
+      .thinking-step {
+        transition: none;
+      }
     }
 
     .message p {
@@ -338,6 +353,7 @@
       background: rgba(13, 17, 23, 0.4);
       -webkit-backdrop-filter: blur(6px);
       backdrop-filter: blur(6px);
+      transition: background-color 0.14s ease, border-color 0.14s ease;
     }
 
     .input-row textarea,
@@ -354,6 +370,7 @@
       min-height: 2.5rem;
       max-height: 8rem;
       overflow-y: auto;
+      transition: border-color 0.14s ease;
     }
 
     .input-row textarea::placeholder,
@@ -389,6 +406,7 @@
       background: rgba(33, 38, 45, 0.9);
       color: #8b949e;
       cursor: pointer;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
 
     .btn-copy-msg:hover {
@@ -410,6 +428,7 @@
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
       -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
+      transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease, color 0.14s ease;
     }
 
     .btn-jump-bottom:hover {
@@ -430,7 +449,7 @@
       border: 1px solid rgba(48, 54, 61, 0.8);
       background: #21262d;
       color: #e6edf3;
-      transition: background 0.15s ease;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
 
     .btn:hover {
@@ -477,6 +496,7 @@
       -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
       margin-top: 0.5rem;
+      transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
     }
 
     .mind-status h3 {
@@ -506,6 +526,72 @@
     .mind-status dd:last-child {
       margin-bottom: 0;
     }
+
+    .sidebar-history-section {
+      width: 100%;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .sidebar-history-section h3 {
+      margin: 0 0 0.35rem 0;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #8b949e;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-history-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sidebar-history-item {
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      color: #c9d1d9;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+      text-align: left;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-history-item:hover {
+      background: rgba(48, 54, 61, 0.4);
+      color: #e6edf3;
+    }
+
+    .sidebar-history-item:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .message.highlight {
+      box-shadow: 0 0 0 1px rgba(56, 139, 253, 0.4);
+      transition: box-shadow 0.2s ease;
+    }
+
+    .thinking-step {
+      font-size: 0.75rem;
+      color: #8b949e;
+      padding: 4px 1.25rem 6px;
+      min-height: 1.25rem;
+      transition: opacity 0.14s ease;
+    }
+
+    .thinking-step:empty {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -522,6 +608,10 @@
         <button class="mode-button active" data-mode="system">Sovereign</button>
         <button class="mode-button" data-mode="builder">Builder</button>
         <button class="mode-button" data-mode="structural">Structural</button>
+      </div>
+      <div class="sidebar-history-section sidebar-expanded-only">
+        <h3>Recent Conversation</h3>
+        <ul id="sidebarHistoryList" class="sidebar-history-list" aria-label="Recent user messages"></ul>
       </div>
       <div class="status-block sidebar-expanded-only">
         <section class="mind-status" aria-label="WhisperLeaf Mind status">
@@ -551,6 +641,7 @@
     <main class="app-main">
       <div class="main-card">
         <div class="card-header">WhisperLeaf Chat</div>
+        <div id="thinkingStep" class="thinking-step" aria-live="polite" aria-atomic="true"></div>
         <div class="chat-window">
           <div class="messages-inner" id="chatWindow"></div>
           <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>

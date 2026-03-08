@@ -10,6 +10,7 @@ const ChatController = {
     history: [],
     currentStreamingBubble: null,
     streamWatchdog: null,
+    nextMessageId: 0,
   },
 
   els: {},
@@ -35,6 +36,8 @@ const ChatController = {
     this.els.owl = document.querySelector('.owl-icon-wrap');
     this.els.modeButtons = document.querySelectorAll('.mode-button');
     this.els.mindMode = document.getElementById('mindMode');
+    this.els.sidebarHistoryList = document.getElementById('sidebarHistoryList');
+    this.els.thinkingStep = document.getElementById('thinkingStep');
   },
 
   initState() {
@@ -107,6 +110,17 @@ const ChatController = {
 
     if (clearBtn) clearBtn.addEventListener('click', () => this.clearSession());
 
+    const listEl = this.els.sidebarHistoryList;
+    if (listEl) {
+      listEl.addEventListener('click', (e) => {
+        const item = e.target.closest('.sidebar-history-item');
+        if (item) {
+          const id = item.getAttribute('data-target-message-id');
+          if (id) this.scrollToMessageAnchor(id);
+        }
+      });
+    }
+
     if (modeButtons && modeButtons.length) {
       modeButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -175,6 +189,7 @@ const ChatController = {
     this.state.streamWatchdog = setTimeout(() => {
       console.warn('Stream watchdog triggered');
       this.stopThinking();
+      this.clearThinkingStep();
       this.setSendingState(false);
     }, 25000);
   },
@@ -200,13 +215,15 @@ const ChatController = {
   },
 
   // --- Message rendering
-  appendMessage(role, text) {
+  appendMessage(role, text, opts) {
     if (!text && role !== 'assistant') return;
     const { chatWindow } = this.els;
     if (!chatWindow) return;
 
+    const messageId = 'msg-' + (this.state.nextMessageId++);
     const div = document.createElement('div');
     div.className = 'message ' + role;
+    div.setAttribute('data-message-id', messageId);
     if (role === 'assistant') {
       const wrap = document.createElement('div');
       wrap.className = 'message-wrap';
@@ -220,6 +237,7 @@ const ChatController = {
       div.textContent = text || '';
     }
     chatWindow.appendChild(div);
+    if (role === 'user' && !(opts && opts.skipSidebarRefresh)) this.refreshSidebarHistory();
     this.scrollToBottomIfNearBottom();
     this.updateScrollButtonVisibility();
   },
@@ -228,8 +246,10 @@ const ChatController = {
     const { chatWindow } = this.els;
     if (!chatWindow) return null;
 
+    const messageId = 'msg-' + (this.state.nextMessageId++);
     const div = document.createElement('div');
     div.className = 'message assistant';
+    div.setAttribute('data-message-id', messageId);
     const textSpan = document.createElement('span');
     textSpan.className = 'streaming-text';
     textSpan.textContent = '';
@@ -307,6 +327,55 @@ const ChatController = {
     return { blocks: parts, remainder };
   },
 
+  // --- Sidebar history (current-session navigator)
+  refreshSidebarHistory() {
+    const listEl = this.els.sidebarHistoryList;
+    const chatWindow = this.els.chatWindow;
+    if (!listEl || !chatWindow) return;
+
+    const userMessages = Array.from(chatWindow.querySelectorAll('.message.user[data-message-id]'));
+    const recent = userMessages.slice(-8).reverse();
+    const maxPreview = 50;
+
+    listEl.innerHTML = '';
+    for (const el of recent) {
+      const id = el.getAttribute('data-message-id');
+      const raw = (el.textContent || '').trim();
+      const preview = raw.length > maxPreview ? raw.slice(0, maxPreview) + '\u2026' : raw;
+      const li = document.createElement('li');
+      li.className = 'sidebar-history-item';
+      li.setAttribute('data-target-message-id', id);
+      li.textContent = preview || '(empty)';
+      li.setAttribute('role', 'button');
+      li.setAttribute('tabindex', '0');
+      listEl.appendChild(li);
+    }
+  },
+
+  setThinkingStep(text) {
+    const el = this.els.thinkingStep;
+    if (el) el.textContent = text || '';
+  },
+
+  clearThinkingStep() {
+    this.setThinkingStep('');
+  },
+
+  scrollToMessageAnchor(messageId) {
+    const chatMessages = this.els.chatMessages;
+    if (!chatMessages) return;
+    const el = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
+    el.classList.add('highlight');
+    const t = setTimeout(() => {
+      el.classList.remove('highlight');
+    }, 2000);
+    if (el._highlightTimer) clearTimeout(el._highlightTimer);
+    el._highlightTimer = t;
+  },
+
   // --- Session
   async loadSessionHistory() {
     try {
@@ -318,8 +387,9 @@ const ChatController = {
       this.els.chatWindow.innerHTML = '';
       this.state.history = list;
       for (const msg of list) {
-        if (msg.role) this.appendMessage(msg.role, msg.content || '');
+        if (msg.role) this.appendMessage(msg.role, msg.content || '', { skipSidebarRefresh: true });
       }
+      this.refreshSidebarHistory();
       if (this.state.history.length > 0) this.scrollToBottomIfNearBottom();
       this.updateScrollButtonVisibility();
     } catch (_) {}
@@ -335,6 +405,7 @@ const ChatController = {
     } catch (_) {}
     this.els.chatWindow.innerHTML = '';
     this.state.history = [];
+    this.refreshSidebarHistory();
   },
 
   // --- Stream response (reader loop)
@@ -359,15 +430,28 @@ const ChatController = {
         if (event === 'chunk' && data !== undefined) {
           fullReply += data;
           this.updateStreamingBubble(fullReply);
+          this.clearThinkingStep();
+        } else if (event === 'status') {
+          try {
+            const payload = typeof data === 'string' ? JSON.parse(data) : data;
+            const step = payload && payload.step;
+            const query = (payload && payload.query) || '';
+            if (step === 'memory_search') {
+              const short = String(query).trim().slice(0, 40);
+              this.setThinkingStep(short ? `Searching memory: ${short}${short.length >= 40 ? '\u2026' : ''}` : 'Searching memory\u2026');
+            }
+          } catch (_) {}
         } else if (event === 'done') {
           this.stopWatchdog();
           this.stopThinking();
+          this.clearThinkingStep();
           this.state.history.push({ role: 'assistant', content: fullReply || '' });
           this.finalizeStreamingBubble();
           return;
         } else if (event === 'error') {
           this.stopWatchdog();
           this.stopThinking();
+          this.clearThinkingStep();
           this.setStreamingBubbleError((data || '').trim() || 'Error');
           return;
         }
@@ -381,9 +465,11 @@ const ChatController = {
         if (event === 'chunk' && data !== undefined) {
           fullReply += data;
           this.updateStreamingBubble(fullReply);
+          this.clearThinkingStep();
         } else if (event === 'error') {
           this.stopWatchdog();
           this.stopThinking();
+          this.clearThinkingStep();
           this.setStreamingBubbleError((data || '').trim() || 'Error');
           return;
         }
@@ -392,6 +478,7 @@ const ChatController = {
 
     this.stopWatchdog();
     this.stopThinking();
+    this.clearThinkingStep();
     this.state.history.push({ role: 'assistant', content: fullReply || '' });
     this.finalizeStreamingBubble();
   },
@@ -408,6 +495,7 @@ const ChatController = {
     this.appendMessage('user', text);
     this.state.history.push({ role: 'user', content: text });
     this.startThinking();
+    this.setThinkingStep('Thinking\u2026');
     this.createStreamingBubble();
     this.startWatchdog();
 
@@ -425,6 +513,7 @@ const ChatController = {
       if (!res.ok) {
         this.stopWatchdog();
         this.stopThinking();
+        this.clearThinkingStep();
         const err = await res.json().catch(() => ({}));
         this.setStreamingBubbleError(err.detail || 'Request failed');
         return;
@@ -433,6 +522,7 @@ const ChatController = {
       if (!res.body) {
         this.stopWatchdog();
         this.stopThinking();
+        this.clearThinkingStep();
         this.setStreamingBubbleError('No response body');
         return;
       }
@@ -441,8 +531,10 @@ const ChatController = {
     } catch (e) {
       this.stopWatchdog();
       this.stopThinking();
+      this.clearThinkingStep();
       this.setStreamingBubbleError('Network error: ' + (e && e.message ? e.message : 'Unknown error'));
     } finally {
+      this.clearThinkingStep();
       this.setSendingState(false);
     }
   },

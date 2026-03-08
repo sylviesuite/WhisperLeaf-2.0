@@ -57,6 +57,7 @@ from .memory import (
     VISIBILITY_VALUES,
 )
 from .tools_registry import register_tool, list_tools, call_tool
+from .tools import tool_bus, register_memory_search_tool
 
 # -------------------------------------------------------------------
 # FastAPI app + middleware
@@ -105,6 +106,7 @@ model_client = LocalModelClient()
 DATA_DIR = PROJECT_ROOT / "data"
 memory_manager = MemoryManager(data_dir=str(DATA_DIR))
 memory_search = MemorySearch(data_dir=str(DATA_DIR), memory_manager=memory_manager)
+register_memory_search_tool(memory_search)
 vault_manager = VaultManager()
 vector_store = VectorStore()
 document_processor = DocumentProcessor()
@@ -376,57 +378,54 @@ def _looks_sensitive(text: str) -> bool:
     return False
 
 
-def _build_memory_context(query: str, limit: int = 5) -> str:
-    """
-    Build a RELEVANT MEMORY context block for the model. Tries semantic search (MemorySearch),
-    then keyword search over simple memory (memory.search_memories_by_query), then recency fallback.
-    Returns empty string if no memories. Records used_in_context for simple-memory entries.
-    """
-    snippets: List[str] = []
-    entries_for_audit: List[Dict[str, Any]] = []
+REWRITE_QUERY_SYSTEM = (
+    "You rewrite user messages into short semantic memory search queries. "
+    "Output only the query: noun phrases and key topics, no explanation or punctuation."
+)
 
+
+async def _rewrite_memory_query(user_message: str) -> str:
+    """
+    Rewrite the user message into a short semantic retrieval query.
+    On failure or empty result, returns the original message (caller should still fall back).
+    """
+    if not (user_message or "").strip():
+        return (user_message or "").strip()
     try:
-        results = memory_search.semantic_search(
-            query=(query or "").strip(),
-            limit=limit,
-            privacy_level=PrivacyLevel.PRIVATE,
+        reply = await model_client.chat(
+            REWRITE_QUERY_SYSTEM,
+            [{"role": "user", "content": (user_message or "").strip()}],
         )
-        if results:
-            for entry, _ in results:
-                content = (getattr(entry, "content", None) or "").strip()
-                if content:
-                    snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
+        if not reply:
+            return (user_message or "").strip()
+        # First line only, stripped, reasonable length for retrieval
+        query = reply.split("\n")[0].strip()
+        if not query:
+            return (user_message or "").strip()
+        return query[:200].strip()
     except Exception:
-        pass
+        return (user_message or "").strip()
 
-    if not snippets:
-        try:
-            entries_for_audit = search_memories_by_query(
-                (query or "").strip(), limit=limit, exclude_blocked=True
-            )
-            if entries_for_audit:
-                for e in entries_for_audit:
-                    content = (e.get("content") or "").strip()
-                    if content:
-                        snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
-        except Exception:
-            entries_for_audit = []
 
-    if not snippets:
-        entries_for_audit = get_recent_memory_entries(limit=limit, exclude_blocked=True)
-        snippets = [
-            (e.get("content") or "").strip()[:400]
-            + ("..." if len((e.get("content") or "")) > 400 else "")
-            for e in entries_for_audit
-            if (e.get("content") or "").strip()
-        ]
-
+async def _build_memory_context(query: str, limit: int = 5) -> str:
+    """
+    Build a RELEVANT MEMORY context block via the Tool Bus (memory.search).
+    Formats tool result and records used_in_context for simple-memory entries.
+    """
+    result = await tool_bus.execute(
+        "memory.search",
+        {"query": (query or "").strip(), "top_k": limit},
+        context={},
+    )
+    if not result.ok or not result.data:
+        return ""
+    snippets = result.data.get("snippets") or []
+    entries_for_audit = result.data.get("entries_for_audit") or []
     for e in entries_for_audit:
         try:
             record_audit(e["id"], "used_in_context", {"route": "chat"})
         except Exception:
             pass
-
     if not snippets:
         return ""
     return "RELEVANT MEMORY:\n" + "\n".join("- " + s for s in snippets)
@@ -481,7 +480,10 @@ async def chat_endpoint(payload: ChatRequest):
 
     # Build messages with semantic/keyword memory context when available
     messages = [{"role": m.role, "content": m.content} for m in payload.history]
-    memory_block = _build_memory_context(message_for_model, limit=5)
+    memory_query = await _rewrite_memory_query(message_for_model)
+    if not (memory_query or "").strip():
+        memory_query = message_for_model
+    memory_block = await _build_memory_context(memory_query, limit=5)
     used_memory = bool(memory_block)
     if memory_block:
         note = "Note: You may use the relevant memory context below to answer consistently.\n\n"
@@ -499,6 +501,12 @@ async def chat_endpoint(payload: ChatRequest):
     async def generate() -> Any:
         full_reply = ""
         if used_memory:
+            # Optional status for UI: show "Searching memory: <query>" before chunks
+            status = json.dumps({
+                "step": "memory_search",
+                "query": (memory_query or "")[:40].strip(),
+            })
+            yield _sse_message("status", status)
             meta = json.dumps({"used_memory": True, "memory_count": max(1, memory_block.count("- "))})
             yield _sse_message("meta", meta)
         try:
