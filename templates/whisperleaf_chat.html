@@ -280,6 +280,25 @@
     let history = [];
     let isSending = false;
     let currentStreamingBubble = null;
+    let streamWatchdog = null;
+
+    function startWatchdog() {
+      clearTimeout(streamWatchdog);
+      streamWatchdog = setTimeout(() => {
+        console.warn("Stream watchdog triggered");
+        stopThinking();
+        setSendingState(false);
+      }, 25000);
+    }
+
+    function stopWatchdog() {
+      clearTimeout(streamWatchdog);
+    }
+
+    function setSendingState(sending) {
+      isSending = sending;
+      sendBtn.disabled = sending;
+    }
 
     // --- Owl
     function startThinking() {
@@ -396,13 +415,13 @@
       const text = (messageInput.value || '').trim();
       if (!text) return;
 
-      isSending = true;
+      setSendingState(true);
       messageInput.value = '';
-      sendBtn.disabled = true;
       appendMessage('user', text);
       history.push({ role: 'user', content: text });
       startThinking();
       createStreamingBubble();
+      startWatchdog();
 
       try {
         const res = await fetch('/api/chat', {
@@ -412,6 +431,7 @@
         });
 
         if (!res.ok) {
+          stopWatchdog();
           stopThinking();
           const err = await res.json().catch(function () { return {}; });
           setStreamingBubbleError(err.detail || 'Request failed');
@@ -419,6 +439,7 @@
         }
 
         if (!res.body) {
+          stopWatchdog();
           stopThinking();
           setStreamingBubbleError('No response body');
           return;
@@ -445,11 +466,13 @@
               fullReply += data;
               updateStreamingBubble(fullReply);
             } else if (event === 'done') {
+              stopWatchdog();
               stopThinking();
               history.push({ role: 'assistant', content: fullReply || '' });
               finalizeStreamingBubble();
               return;
             } else if (event === 'error') {
+              stopWatchdog();
               stopThinking();
               setStreamingBubbleError((data || '').trim() || 'Error');
               return;
@@ -464,21 +487,23 @@
             fullReply += data;
             updateStreamingBubble(fullReply);
           } else if (event === 'error') {
+            stopWatchdog();
             stopThinking();
             setStreamingBubbleError((data || '').trim() || 'Error');
             return;
           }
         }
 
+        stopWatchdog();
         stopThinking();
         history.push({ role: 'assistant', content: fullReply || '' });
         finalizeStreamingBubble();
       } catch (e) {
+        stopWatchdog();
         stopThinking();
         setStreamingBubbleError('Network error: ' + (e && e.message ? e.message : 'Unknown error'));
       } finally {
-        isSending = false;
-        sendBtn.disabled = false;
+        setSendingState(false);
       }
     }
 
