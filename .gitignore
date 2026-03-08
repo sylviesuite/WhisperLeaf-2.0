@@ -1,15 +1,30 @@
-# ========================================
-# WhisperLeaf .gitignore
-# ========================================
+image.png# WhisperLeaf .gitignore
 
-# ---------- Python ----------
+############################
+# Python
+############################
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 
-# ---------- Build / Distribution ----------
+############################
+# Virtual Environments
+############################
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+whisperleaf_env/
+
+############################
+# Distribution / packaging
+############################
+.Python
 build/
+develop-eggs/
 dist/
 downloads/
 eggs/
@@ -25,112 +40,111 @@ wheels/
 *.egg
 MANIFEST
 
-# ---------- Virtual Environments ----------
-.venv/
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-whisperleaf_env/
-
-# ---------- Environment Files ----------
-.env
-.env.*
-.envrc
-
-# ---------- Logs ----------
-*.log
+############################
+# Logs
+############################
 logs/
+*.log
 
-# ---------- Databases ----------
+############################
+# Database / User Data
+############################
+data/
 *.db
 *.sqlite
 *.sqlite3
 
-# ---------- Cache ----------
+############################
+# Secrets / Config
+############################
+.env
+config/.env
+config/config.yaml
+config/constitutional_rules.yaml
+
+############################
+# Encryption Keys
+############################
+*.key
+*.pem
+*.crt
+
+############################
+# Temporary Files
+############################
+tmp/
+temp/
+.tmp/
+
+############################
+# Cache
+############################
 .cache/
 *.cache
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
 
-# ---------- Test / Coverage ----------
-htmlcov/
+############################
+# Testing
+############################
+.pytest_cache/
 .coverage
-.coverage.*
+htmlcov/
 .tox/
 .nox/
 
-# ---------- Jupyter ----------
-.ipynb_checkpoints/
-
-# ---------- Documentation ----------
-docs/_build/
-site/
-
-# ---------- IDE ----------
+############################
+# IDE
+############################
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# ---------- OS ----------
+############################
+# OS
+############################
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
-ehthumbs.db
 
-# ---------- Cursor ----------
-.cursor/
-.cursorignore
-.cursorindexingignore
+############################
+# Jupyter
+############################
+.ipynb_checkpoints
 
-# ---------- WhisperLeaf Sensitive Config ----------
-config/.env
-config/config.yaml
-config/constitutional_rules.yaml
+############################
+# Documentation
+############################
+docs/_build/
+site/
 
-# ---------- WhisperLeaf User Data ----------
-data/
+############################
+# WhisperLeaf Data
+############################
 memories/
 emotional_data/
 personal_content/
 
-# ---------- WhisperLeaf Models ----------
+############################
+# Local AI Models
+############################
 models/
 *.model
 *.bin
 
-# ---------- WhisperLeaf Cache ----------
+############################
+# Content Cache
+############################
 content_cache/
 rss_cache/
 
-# ---------- WhisperLeaf System ----------
+############################
+# System Files
+############################
 .whisperleaf/
 whisperleaf.conf
 
-# ---------- Backups ----------
-backups/
-*.backup
-*.bak
-
-# ---------- Temporary ----------
-tmp/
-temp/
-.tmp/
-
-# ---------- Keys ----------
-*.key
-*.pem
-*.crt
-
-# ---------- Misc ----------
-celerybeat-schedule
-celerybeat.pid
-.python-version
-.pypirc
+############################
+# Cursor AI
+############################
+.cursorignore
+.cursorindexingignore
