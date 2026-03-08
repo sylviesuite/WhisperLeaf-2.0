@@ -308,15 +308,59 @@
     .footer {
       padding: 0.5rem 1.25rem 1rem;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 0.5rem;
     }
 
+    .status-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
     .status {
       font-size: 0.75rem;
       color: #8b949e;
+    }
+
+    .mind-status {
+      font-size: 0.75rem;
+      color: #8b949e;
+      padding: 0.6rem 0.75rem;
+      background: rgba(13, 17, 23, 0.6);
+      border-radius: 8px;
+      border: 1px solid rgba(48, 54, 61, 0.5);
+      margin-top: 0.5rem;
+    }
+
+    .mind-status h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #c9d1d9;
+      letter-spacing: 0.02em;
+    }
+
+    .mind-status dl {
+      margin: 0;
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .mind-status dt {
+      font-weight: 500;
+      color: #8b949e;
+    }
+
+    .mind-status dd {
+      margin: 0 0 0.35rem 0;
+      color: #e6edf3;
+    }
+
+    .mind-status dd:last-child {
+      margin-bottom: 0;
     }
   </style>
 </head>
@@ -353,7 +397,24 @@
     </form>
 
     <div class="footer">
-      <span class="status">Running locally on your machine</span>
+      <div class="status-block">
+        <span class="status">Running locally on your machine</span>
+        <section class="mind-status" aria-label="WhisperLeaf Mind status">
+          <h3>WhisperLeaf Mind</h3>
+          <dl>
+            <dt>Model</dt>
+            <dd id="mindModel">Mistral-7B (local)</dd>
+            <dt>Memory</dt>
+            <dd id="mindMemory">3 related memories found</dd>
+            <dt>Tools</dt>
+            <dd>Web lookup disabled · Local documents available</dd>
+            <dt>Privacy</dt>
+            <dd>Local only · No external calls</dd>
+            <dt>Mode</dt>
+            <dd id="mindMode">Sovereign</dd>
+          </dl>
+        </section>
+      </div>
       <button class="btn" id="clearBtn">Clear</button>
     </div>
   </div>

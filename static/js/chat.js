@@ -32,6 +32,7 @@ const ChatController = {
     this.els.chatOwl = document.getElementById('chatOwl');
     this.els.owl = document.querySelector('.owl-icon-wrap');
     this.els.modeButtons = document.querySelectorAll('.mode-button');
+    this.els.mindMode = document.getElementById('mindMode');
   },
 
   initState() {
@@ -79,8 +80,11 @@ const ChatController = {
           modeButtons.forEach((b) => b.classList.remove('active'));
           btn.classList.add('active');
           this.state.selectedMode = btn.getAttribute('data-mode') || 'system';
+          if (this.els.mindMode) this.els.mindMode.textContent = btn.textContent.trim();
         });
       });
+      const activeMode = document.querySelector('.mode-button.active');
+      if (this.els.mindMode && activeMode) this.els.mindMode.textContent = activeMode.textContent.trim();
     }
   },
 
