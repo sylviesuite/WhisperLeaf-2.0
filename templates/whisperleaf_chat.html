@@ -120,6 +120,7 @@
       min-height: 0;
       overflow-y: auto;
       padding: 12px 16px 20px;
+      position: relative;
     }
 
     .chat-window .messages-inner {
@@ -131,12 +132,37 @@
       gap: 0.75rem;
     }
 
+    /* Bulletproof streaming message text */
     .message {
       max-width: 100%;
       padding: 0.6rem 0.9rem;
       border-radius: 12px;
       font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
       line-height: 1.45;
+      animation: fadeInMessage 0.18s ease;
+    }
+
+    @keyframes fadeInMessage {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .message { animation: none; }
+    }
+
+    .message p {
+      margin: 0.5em 0;
+    }
+
+    .message code {
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 4px;
+      border-radius: 4px;
     }
 
     .message.user {
@@ -157,6 +183,16 @@
       border: 1px solid rgba(248, 81, 73, 0.35);
     }
 
+    .streaming-cursor {
+      display: inline-block;
+      margin-left: 2px;
+      animation: blink 1s steps(1) infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
     .input-row {
       display: flex;
       gap: 0.5rem;
@@ -165,6 +201,7 @@
       border-top: 1px solid rgba(48, 54, 61, 0.6);
     }
 
+    .input-row textarea,
     .input-row input {
       flex: 1;
       padding: 0.6rem 0.9rem;
@@ -173,15 +210,74 @@
       background: #0d1117;
       color: #e6edf3;
       font-size: 0.9rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 2.5rem;
+      max-height: 8rem;
+      overflow-y: auto;
     }
 
+    .input-row textarea::placeholder,
     .input-row input::placeholder {
       color: #6e7681;
     }
 
+    .input-row textarea:focus,
     .input-row input:focus {
       outline: none;
       border-color: #58a6ff;
+    }
+
+    .message-wrap {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+      width: 100%;
+    }
+
+    .message-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .btn-copy-msg {
+      flex-shrink: 0;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid rgba(48, 54, 61, 0.8);
+      background: rgba(33, 38, 45, 0.9);
+      color: #8b949e;
+      cursor: pointer;
+    }
+
+    .btn-copy-msg:hover {
+      color: #e6edf3;
+      background: rgba(48, 54, 61, 0.9);
+    }
+
+    .btn-jump-bottom {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      border-radius: 8px;
+      border: 1px solid rgba(48, 54, 61, 0.8);
+      background: rgba(22, 27, 34, 0.95);
+      color: #c9d1d9;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-jump-bottom:hover {
+      background: rgba(48, 54, 61, 0.95);
+      color: #e6edf3;
+    }
+
+    .btn-jump-bottom.hidden {
+      display: none;
     }
 
     .btn {
@@ -242,16 +338,17 @@
 
     <div class="chat-window">
       <div class="messages-inner" id="chatWindow"></div>
+      <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>
     </div>
 
     <form id="chatForm" class="input-row" aria-label="Send message">
-      <input
-        type="text"
+      <textarea
         id="messageInput"
-        placeholder="Type a message..."
+        placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
         autocomplete="off"
         aria-label="Message"
-      />
+        rows="1"
+     ></textarea>
       <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
     </form>
 
@@ -269,6 +366,7 @@
     const sendBtn = document.getElementById('sendBtn');
     const clearBtn = document.getElementById('clearBtn');
     const chatForm = document.getElementById('chatForm');
+    const jumpBottomBtn = document.getElementById('jumpBottomBtn');
     const chatOwl = document.getElementById('chatOwl');
     const owl = document.querySelector('.owl-icon-wrap');
     const modeButtons = document.querySelectorAll('.mode-button');
@@ -327,20 +425,56 @@
       if (isNearBottom(chatMessages)) scrollToBottom(chatMessages);
     }
 
+    function updateScrollButtonVisibility() {
+      if (!jumpBottomBtn) return;
+      jumpBottomBtn.classList.toggle('hidden', isNearBottom(chatMessages));
+    }
+
     // --- Message rendering (isolated from transport)
+    function addCopyButtonToBubble(bubble, getText) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-copy-msg';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', function () {
+        const text = typeof getText === 'function' ? getText() : getText;
+        if (text != null) navigator.clipboard.writeText(String(text)).catch(function () {});
+      });
+      bubble.appendChild(btn);
+    }
+
     function appendMessage(role, text) {
       if (!text && role !== 'assistant') return;
       const div = document.createElement('div');
       div.className = 'message ' + role;
-      div.textContent = text || '';
+      if (role === 'assistant') {
+        const wrap = document.createElement('div');
+        wrap.className = 'message-wrap';
+        const body = document.createElement('span');
+        body.className = 'message-body';
+        body.textContent = text || '';
+        wrap.appendChild(body);
+        addCopyButtonToBubble(wrap, function () { return body.textContent; });
+        div.appendChild(wrap);
+      } else {
+        div.textContent = text || '';
+      }
       chatWindow.appendChild(div);
       scrollToBottomIfNearBottom();
+      updateScrollButtonVisibility();
     }
 
     function createStreamingBubble() {
       const div = document.createElement('div');
       div.className = 'message assistant';
-      div.textContent = '';
+      const textSpan = document.createElement('span');
+      textSpan.className = 'streaming-text';
+      textSpan.textContent = '';
+      const cursorSpan = document.createElement('span');
+      cursorSpan.className = 'streaming-cursor';
+      cursorSpan.textContent = '\u258C';
+      div.appendChild(textSpan);
+      div.appendChild(cursorSpan);
       chatWindow.appendChild(div);
       currentStreamingBubble = div;
       scrollToBottomIfNearBottom();
@@ -349,11 +483,28 @@
 
     function updateStreamingBubble(textChunk) {
       if (!currentStreamingBubble) return;
-      currentStreamingBubble.textContent = textChunk;
+      const textEl = currentStreamingBubble.querySelector('.streaming-text');
+      if (textEl) textEl.textContent = textChunk;
       scrollToBottomIfNearBottom();
+      updateScrollButtonVisibility();
     }
 
     function finalizeStreamingBubble() {
+      if (currentStreamingBubble) {
+        const cursor = currentStreamingBubble.querySelector('.streaming-cursor');
+        if (cursor) cursor.remove();
+        const textEl = currentStreamingBubble.querySelector('.streaming-text');
+        const content = textEl ? textEl.textContent : '';
+        const wrap = document.createElement('div');
+        wrap.className = 'message-wrap';
+        const body = document.createElement('span');
+        body.className = 'message-body';
+        body.textContent = content;
+        wrap.appendChild(body);
+        addCopyButtonToBubble(wrap, function () { return body.textContent; });
+        currentStreamingBubble.innerHTML = '';
+        currentStreamingBubble.appendChild(wrap);
+      }
       currentStreamingBubble = null;
     }
 
@@ -379,6 +530,7 @@
           if (msg.role) appendMessage(msg.role, msg.content || '');
         }
         if (history.length > 0) scrollToBottomIfNearBottom();
+        updateScrollButtonVisibility();
       } catch (_) {}
     }
 
@@ -394,19 +546,29 @@
       history = [];
     }
 
-    // --- SSE: extract event type and data from one event block (strip "data:" prefixes, join lines)
-    function parseSSEEvent(block) {
-      const lines = block.split(/\r?\n/).filter(function (line) { return line.length > 0; });
+    // --- SSE: chunk/heartbeat-safe parsing (no raw "data:" in UI, [DONE] stops cleanly)
+    function parseSSEBlock(block) {
+      const lines = block.split(/\r?\n/);
       let event = '';
       const dataLines = [];
       for (const line of lines) {
-        if (line.startsWith('event:')) {
-          event = line.replace(/^event:\s*/, '').trim();
-        } else if (line.startsWith('data:')) {
-          dataLines.push(line.replace(/^data:\s?/, ''));
+        const trimmed = line.trim();
+        if (trimmed.startsWith('event:')) {
+          event = trimmed.replace(/^event:\s*/, '').trim();
+        } else if (trimmed.startsWith('data:')) {
+          dataLines.push(trimmed.replace(/^data:\s?/, ''));
         }
       }
-      return { event, data: dataLines.join('\n') };
+      const data = dataLines.join('\n');
+      if (!event && !data) return null;
+      if (data.trim() === '[DONE]') return { event: 'done', data: '' };
+      return { event, data };
+    }
+
+    function processStreamBuffer(buffer) {
+      const parts = buffer.split(/\n\n+/);
+      const remainder = parts.pop() || '';
+      return { blocks: parts, remainder };
     }
 
     // --- Single send path (form submit only; guarded by isSending)
@@ -417,6 +579,7 @@
 
       setSendingState(true);
       messageInput.value = '';
+      messageInput.style.height = 'auto';
       appendMessage('user', text);
       history.push({ role: 'user', content: text });
       startThinking();
@@ -454,15 +617,15 @@
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split(/\n\n+/);
-          buffer = blocks.pop() || '';
+          const { blocks, remainder } = processStreamBuffer(buffer);
+          buffer = remainder;
 
           for (const block of blocks) {
-            const trimmed = block.trim();
-            if (!trimmed) continue;
-            const { event, data } = parseSSEEvent(block);
+            const parsed = parseSSEBlock(block);
+            if (parsed === null) continue;
+            const { event, data } = parsed;
 
-            if (event === 'chunk') {
+            if (event === 'chunk' && data !== undefined) {
               fullReply += data;
               updateStreamingBubble(fullReply);
             } else if (event === 'done') {
@@ -482,15 +645,18 @@
 
         // Flush remaining buffer as one event if present
         if (buffer.trim()) {
-          const { event, data } = parseSSEEvent(buffer);
-          if (event === 'chunk') {
-            fullReply += data;
-            updateStreamingBubble(fullReply);
-          } else if (event === 'error') {
-            stopWatchdog();
-            stopThinking();
-            setStreamingBubbleError((data || '').trim() || 'Error');
-            return;
+          const parsed = parseSSEBlock(buffer);
+          if (parsed !== null) {
+            const { event, data } = parsed;
+            if (event === 'chunk' && data !== undefined) {
+              fullReply += data;
+              updateStreamingBubble(fullReply);
+            } else if (event === 'error') {
+              stopWatchdog();
+              stopThinking();
+              setStreamingBubbleError((data || '').trim() || 'Error');
+              return;
+            }
           }
         }
 
@@ -512,6 +678,28 @@
       chatForm.addEventListener('submit', function (e) {
         e.preventDefault();
         sendMessage();
+      });
+    }
+
+    // Enter sends, Shift+Enter newline; request lock prevents double send
+    if (messageInput) {
+      messageInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+      messageInput.addEventListener('input', function () {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 8 * 16) + 'px';
+      });
+    }
+
+    if (chatMessages && jumpBottomBtn) {
+      chatMessages.addEventListener('scroll', updateScrollButtonVisibility);
+      jumpBottomBtn.addEventListener('click', function () {
+        scrollToBottom(chatMessages);
+        updateScrollButtonVisibility();
       });
     }
 
