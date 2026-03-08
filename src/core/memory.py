@@ -6,6 +6,7 @@ Includes visibility, source, and audit log for the Trust Layer.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import json
 from datetime import datetime
@@ -166,6 +167,55 @@ def get_recent_memories(limit: int = 5) -> List[str]:
     """
     entries = get_recent_memory_entries(limit=limit, exclude_blocked=True)
     return [e["content"] for e in entries]
+
+
+def search_memories_by_query(
+    query: str,
+    limit: int = 5,
+    exclude_blocked: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Return memories relevant to the query (keyword overlap over content).
+    Same shape as get_recent_memory_entries. Falls back to recency if query is empty or DB missing.
+    """
+    if not _DB_PATH:
+        return []
+    query = (query or "").strip()
+    if not query:
+        return get_recent_memory_entries(limit=limit, exclude_blocked=exclude_blocked)
+    where = "WHERE visibility != 'blocked'" if exclude_blocked else ""
+    with _get_conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT id, content, visibility, source, created_at FROM memories {where} ORDER BY created_at DESC LIMIT 100",
+            (),
+        ).fetchall()
+    entries = [
+        {
+            "id": row["id"],
+            "content": row["content"],
+            "visibility": row["visibility"],
+            "source": row["source"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    query_words = set(re.findall(r"\w+", query.lower()))
+    if not query_words:
+        for e in entries[:limit]:
+            record_audit(e["id"], "searched")
+        return entries[:limit]
+
+    def score(e: Dict[str, Any]) -> tuple:
+        content_lower = (e.get("content") or "").lower()
+        hits = sum(1 for w in query_words if w in content_lower)
+        return (-hits, e.get("created_at") or "")
+
+    entries.sort(key=score)
+    result = entries[:limit]
+    for e in result:
+        record_audit(e["id"], "searched")
+    return result
 
 
 def set_visibility(memory_id: int, visibility: str) -> bool:

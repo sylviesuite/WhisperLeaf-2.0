@@ -244,15 +244,16 @@
       <div class="messages-inner" id="chatWindow"></div>
     </div>
 
-    <div class="input-row">
+    <form id="chatForm" class="input-row" aria-label="Send message">
       <input
         type="text"
         id="messageInput"
         placeholder="Type a message..."
         autocomplete="off"
+        aria-label="Message"
       />
-      <button class="btn btn-send" id="sendBtn">Send</button>
-    </div>
+      <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
+    </form>
 
     <div class="footer">
       <span class="status">Running locally on your machine</span>
@@ -261,13 +262,32 @@
   </div>
 
   <script>
+    // --- DOM refs
     const chatMessages = document.querySelector('.chat-window');
     const chatWindow = document.getElementById('chatWindow');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const chatForm = document.getElementById('chatForm');
     const chatOwl = document.getElementById('chatOwl');
+    const owl = document.querySelector('.owl-icon-wrap');
     const modeButtons = document.querySelectorAll('.mode-button');
+
+    // --- Session and state
+    let sessionId = sessionStorage.getItem('whisperleaf_session_id') || crypto.randomUUID();
+    sessionStorage.setItem('whisperleaf_session_id', sessionId);
+    let selectedMode = 'system';
+    let history = [];
+    let isSending = false;
+    let currentStreamingBubble = null;
+
+    // --- Owl
+    function startThinking() {
+      if (owl) owl.classList.add('owl-thinking');
+    }
+    function stopThinking() {
+      if (owl) owl.classList.remove('owl-thinking');
+    }
 
     if (chatOwl) {
       chatOwl.addEventListener('click', function () {
@@ -275,93 +295,137 @@
       });
     }
 
+    // --- Scroll
     function isNearBottom(container, threshold = 100) {
       if (!container) return true;
-      return (
-        container.scrollHeight -
-          container.scrollTop -
-          container.clientHeight <
-        threshold
-      );
+      return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
     }
-
     function scrollToBottom(container) {
       if (!container) return;
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth',
-      });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+    function scrollToBottomIfNearBottom() {
+      if (isNearBottom(chatMessages)) scrollToBottom(chatMessages);
     }
 
-    let sessionId = null;
-    // Sovereign/system mode by default
-    let selectedMode = 'system';
-  // In-browser conversation history (user + assistant turns)
-  let history = [];
-
-    // Mode button behavior
-    modeButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        modeButtons.forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedMode = btn.getAttribute('data-mode') || 'system';
-      });
-    });
-
-    function appendMessage(text, role) {
-      if (!text) return;
+    // --- Message rendering (isolated from transport)
+    function appendMessage(role, text) {
+      if (!text && role !== 'assistant') return;
       const div = document.createElement('div');
       div.className = 'message ' + role;
-      div.textContent = text;
+      div.textContent = text || '';
       chatWindow.appendChild(div);
-      if (isNearBottom(chatMessages)) {
-        scrollToBottom(chatMessages);
+      scrollToBottomIfNearBottom();
+    }
+
+    function createStreamingBubble() {
+      const div = document.createElement('div');
+      div.className = 'message assistant';
+      div.textContent = '';
+      chatWindow.appendChild(div);
+      currentStreamingBubble = div;
+      scrollToBottomIfNearBottom();
+      return div;
+    }
+
+    function updateStreamingBubble(textChunk) {
+      if (!currentStreamingBubble) return;
+      currentStreamingBubble.textContent = textChunk;
+      scrollToBottomIfNearBottom();
+    }
+
+    function finalizeStreamingBubble() {
+      currentStreamingBubble = null;
+    }
+
+    function setStreamingBubbleError(message) {
+      if (currentStreamingBubble) {
+        currentStreamingBubble.className = 'message error';
+        currentStreamingBubble.textContent = message || 'Error';
       }
+      finalizeStreamingBubble();
     }
 
-    function stopOwlThinking() {
-      if (chatOwl) chatOwl.classList.remove('owl-thinking');
+    // --- Session history
+    async function loadSessionHistory() {
+      try {
+        const res = await fetch(`/api/chat/history?session_id=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = data.history || [];
+        if (list.length === 0) return;
+        chatWindow.innerHTML = '';
+        history = list;
+        for (const msg of list) {
+          if (msg.role) appendMessage(msg.role, msg.content || '');
+        }
+        if (history.length > 0) scrollToBottomIfNearBottom();
+      } catch (_) {}
     }
 
+    async function clearChat() {
+      try {
+        await fetch('/api/chat/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+      } catch (_) {}
+      chatWindow.innerHTML = '';
+      history = [];
+    }
+
+    // --- SSE: extract event type and data from one event block (strip "data:" prefixes, join lines)
+    function parseSSEEvent(block) {
+      const lines = block.split(/\r?\n/).filter(function (line) { return line.length > 0; });
+      let event = '';
+      const dataLines = [];
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          event = line.replace(/^event:\s*/, '').trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.replace(/^data:\s?/, ''));
+        }
+      }
+      return { event, data: dataLines.join('\n') };
+    }
+
+    // --- Single send path (form submit only; guarded by isSending)
     async function sendMessage() {
+      if (isSending) return;
       const text = (messageInput.value || '').trim();
       if (!text) return;
 
+      isSending = true;
       messageInput.value = '';
-      appendMessage(text, 'user');
-      history.push({ role: 'user', content: text });
-
       sendBtn.disabled = true;
-      if (chatOwl) chatOwl.classList.add('owl-thinking');
-      try {
-        const body = {
-          message: text,
-          history: history
-        };
+      appendMessage('user', text);
+      history.push({ role: 'user', content: text });
+      startThinking();
+      createStreamingBubble();
 
+      try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify({ message: text, history: history, session_id: sessionId })
         });
 
         if (!res.ok) {
-          stopOwlThinking();
-          const err = await res.json().catch(() => ({}));
-          appendMessage(err.detail || 'Request failed', 'error');
-          sendBtn.disabled = false;
+          stopThinking();
+          const err = await res.json().catch(function () { return {}; });
+          setStreamingBubbleError(err.detail || 'Request failed');
           return;
         }
 
         if (!res.body) {
-          stopOwlThinking();
-          appendMessage('No response body', 'error');
-          sendBtn.disabled = false;
+          stopThinking();
+          setStreamingBubbleError('No response body');
           return;
         }
 
         const reader = res.body.getReader();
-        const decoder = new TextDecoder();
+        const decoder = new TextDecoder('utf-8');
         let fullReply = '';
         let buffer = '';
 
@@ -369,68 +433,77 @@
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || '';
-          for (const part of parts) {
-            const eventMatch = part.match(/^event:\s*(\S+)/m);
-            const dataMatch = part.match(/^data:\s*(.*)/ms);
-            const event = eventMatch ? eventMatch[1] : '';
-            const rawData = dataMatch ? dataMatch[1] : '';
+          const blocks = buffer.split(/\n\n+/);
+          buffer = blocks.pop() || '';
+
+          for (const block of blocks) {
+            const trimmed = block.trim();
+            if (!trimmed) continue;
+            const { event, data } = parseSSEEvent(block);
+
             if (event === 'chunk') {
-              fullReply += rawData;
+              fullReply += data;
+              updateStreamingBubble(fullReply);
             } else if (event === 'done') {
-              stopOwlThinking();
-              appendMessage(fullReply || '', 'assistant');
+              stopThinking();
               history.push({ role: 'assistant', content: fullReply || '' });
-              sendBtn.disabled = false;
+              finalizeStreamingBubble();
               return;
             } else if (event === 'error') {
-              stopOwlThinking();
-              appendMessage(rawData.trim() || 'Error', 'error');
-              sendBtn.disabled = false;
+              stopThinking();
+              setStreamingBubbleError((data || '').trim() || 'Error');
               return;
             }
           }
         }
 
-        if (buffer) {
-          const eventMatch = buffer.match(/^event:\s*(\S+)/m);
-          const dataMatch = buffer.match(/^data:\s*(.*)/ms);
-          const event = eventMatch ? eventMatch[1] : '';
-          const rawData = dataMatch ? dataMatch[1] : '';
-          if (event === 'chunk') fullReply += rawData;
-          else if (event === 'error') {
-            stopOwlThinking();
-            appendMessage(rawData.trim() || 'Error', 'error');
-            sendBtn.disabled = false;
+        // Flush remaining buffer as one event if present
+        if (buffer.trim()) {
+          const { event, data } = parseSSEEvent(buffer);
+          if (event === 'chunk') {
+            fullReply += data;
+            updateStreamingBubble(fullReply);
+          } else if (event === 'error') {
+            stopThinking();
+            setStreamingBubbleError((data || '').trim() || 'Error');
             return;
           }
         }
 
-        stopOwlThinking();
-        appendMessage(fullReply || '', 'assistant');
+        stopThinking();
         history.push({ role: 'assistant', content: fullReply || '' });
+        finalizeStreamingBubble();
       } catch (e) {
-        stopOwlThinking();
-        appendMessage('Network error: ' + e.message, 'error');
+        stopThinking();
+        setStreamingBubbleError('Network error: ' + (e && e.message ? e.message : 'Unknown error'));
+      } finally {
+        isSending = false;
+        sendBtn.disabled = false;
       }
-      sendBtn.disabled = false;
     }
 
-    sendBtn.addEventListener('click', sendMessage);
-
-    // Enter = send, Shift+Enter = newline (for future textarea swap)
-    messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    // --- Form submit only (Enter and button click both go through form)
+    if (chatForm) {
+      chatForm.addEventListener('submit', function (e) {
         e.preventDefault();
         sendMessage();
-      }
+      });
+    }
+
+    clearBtn.addEventListener('click', function () {
+      clearChat();
     });
 
-    clearBtn.addEventListener('click', () => {
-      chatWindow.innerHTML = '';
-      history = [];
+    // Mode buttons
+    modeButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        modeButtons.forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        selectedMode = btn.getAttribute('data-mode') || 'system';
+      });
     });
+
+    loadSessionHistory();
   </script>
 </body>
 </html>

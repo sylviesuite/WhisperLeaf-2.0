@@ -19,6 +19,7 @@ from fastapi import (
     File,
     Form,
     Request,
+    Query,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -48,6 +49,7 @@ from .memory import (
     save_memory,
     get_recent_memories,
     get_recent_memory_entries,
+    search_memories_by_query,
     set_visibility as memory_set_visibility,
     get_audit_events,
     get_memory,
@@ -278,6 +280,9 @@ async def memory_chat(request: MemoryChatRequest):
 # Simple stateless chat endpoint (browser-managed history)
 # -------------------------------------------------------------------
 
+# In-memory session persistence: session_id -> list of {role, content}
+CHAT_SESSIONS: Dict[str, List[Dict[str, str]]] = {}
+
 Role = Literal["user", "assistant"]
 
 
@@ -289,6 +294,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
+    session_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -370,6 +376,62 @@ def _looks_sensitive(text: str) -> bool:
     return False
 
 
+def _build_memory_context(query: str, limit: int = 5) -> str:
+    """
+    Build a RELEVANT MEMORY context block for the model. Tries semantic search (MemorySearch),
+    then keyword search over simple memory (memory.search_memories_by_query), then recency fallback.
+    Returns empty string if no memories. Records used_in_context for simple-memory entries.
+    """
+    snippets: List[str] = []
+    entries_for_audit: List[Dict[str, Any]] = []
+
+    try:
+        results = memory_search.semantic_search(
+            query=(query or "").strip(),
+            limit=limit,
+            privacy_level=PrivacyLevel.PRIVATE,
+        )
+        if results:
+            for entry, _ in results:
+                content = (getattr(entry, "content", None) or "").strip()
+                if content:
+                    snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
+    except Exception:
+        pass
+
+    if not snippets:
+        try:
+            entries_for_audit = search_memories_by_query(
+                (query or "").strip(), limit=limit, exclude_blocked=True
+            )
+            if entries_for_audit:
+                for e in entries_for_audit:
+                    content = (e.get("content") or "").strip()
+                    if content:
+                        snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
+        except Exception:
+            entries_for_audit = []
+
+    if not snippets:
+        entries_for_audit = get_recent_memory_entries(limit=limit, exclude_blocked=True)
+        snippets = [
+            (e.get("content") or "").strip()[:400]
+            + ("..." if len((e.get("content") or "")) > 400 else "")
+            for e in entries_for_audit
+            if (e.get("content") or "").strip()
+        ]
+
+    for e in entries_for_audit:
+        try:
+            record_audit(e["id"], "used_in_context", {"route": "chat"})
+        except Exception:
+            pass
+
+    if not snippets:
+        return ""
+    return "RELEVANT MEMORY:\n" + "\n".join("- " + s for s in snippets)
+
+
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest):
     """
@@ -384,6 +446,12 @@ async def chat_endpoint(payload: ChatRequest):
         if text:
             save_memory(text, source="chat")
         reply = "I've remembered that."
+        sid = getattr(payload, "session_id", None)
+        if sid:
+            session_list = [{"role": m.role, "content": m.content} for m in payload.history]
+            session_list.append({"role": "user", "content": raw_message})
+            session_list.append({"role": "assistant", "content": reply})
+            CHAT_SESSIONS[sid] = session_list
 
         async def remember_stream() -> Any:
             yield _sse_message("chunk", reply)
@@ -411,29 +479,35 @@ async def chat_endpoint(payload: ChatRequest):
             snippet = clean[:80] + ("..." if len(clean) > 80 else "")
             print(f"Auto-saved memory: {snippet}")
 
-    # Build messages with recent memories prepended to the user message
+    # Build messages with semantic/keyword memory context when available
     messages = [{"role": m.role, "content": m.content} for m in payload.history]
-    memory_entries = get_recent_memory_entries(limit=5, exclude_blocked=True)
-    for entry in memory_entries:
-        record_audit(entry["id"], "used_in_context", {"route": "chat"})
-    recent = [e["content"] for e in memory_entries]
-    used_memory = bool(recent)
-    if recent:
+    memory_block = _build_memory_context(message_for_model, limit=5)
+    used_memory = bool(memory_block)
+    if memory_block:
         note = "Note: You may use the relevant memory context below to answer consistently.\n\n"
-        memory_block = note + "Relevant Memory:\n" + "\n".join("- " + m for m in recent) + "\n\nUser message:\n"
-        user_content = memory_block + message_for_model
+        user_content = note + memory_block + "\n\nUser message:\n" + message_for_model
     else:
         user_content = message_for_model
     messages.append({"role": "user", "content": user_content})
 
+    session_id = getattr(payload, "session_id", None)
+    if session_id:
+        session_list = [{"role": m.role, "content": m.content} for m in payload.history]
+        session_list.append({"role": "user", "content": raw_message})
+        CHAT_SESSIONS[session_id] = session_list
+
     async def generate() -> Any:
+        full_reply = ""
         if used_memory:
-            meta = json.dumps({"used_memory": True, "memory_count": len(recent)})
+            meta = json.dumps({"used_memory": True, "memory_count": max(1, memory_block.count("- "))})
             yield _sse_message("meta", meta)
         try:
             async for chunk in model_client.chat_stream(SYSTEM_PROMPT, messages):
+                full_reply += chunk
                 yield _sse_message("chunk", chunk)
             yield _sse_message("done", "")
+            if session_id and session_id in CHAT_SESSIONS:
+                CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
         except httpx.ConnectError:
             yield _sse_message(
                 "error",
@@ -454,6 +528,24 @@ async def chat_endpoint(payload: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/api/chat/history")
+async def get_chat_history(session_id: Optional[str] = Query(None)):
+    """Return persisted messages for the given session. Safe if session_id missing or unknown."""
+    return {"history": CHAT_SESSIONS.get(session_id or "", [])}
+
+
+class ChatClearBody(BaseModel):
+    session_id: Optional[str] = None
+
+
+@app.post("/api/chat/clear")
+async def clear_chat_session(body: ChatClearBody):
+    """Clear persisted history for the given session."""
+    if body.session_id:
+        CHAT_SESSIONS.pop(body.session_id, None)
+    return {"ok": True}
 
 
 # -------------------------------------------------------------------
