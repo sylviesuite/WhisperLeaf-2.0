@@ -1,16 +1,23 @@
 /**
  * WhisperLeaf Chat — front-end controller.
- * Streaming, session persistence, request lock, watchdog, and UI helpers.
+ * Single source of truth: state.messages. All rendering derives from it.
  */
 const ChatController = {
   state: {
     isSending: false,
     sessionId: null,
-    selectedMode: 'system',
-    history: [],
-    currentStreamingBubble: null,
+    currentMode: 'default',
+    messages: [],
+    currentStreamingId: null,
     streamWatchdog: null,
-    nextMessageId: 0,
+    currentStreamId: null,
+    modelAvailable: true,
+    lastMemorySnippets: [],
+    docSourcesForCurrentResponse: [],
+    docExcerptsForCurrentResponse: [],
+    documents: [],
+    documentSearchQuery: '',
+    forceShowOnboarding: false,
   },
 
   els: {},
@@ -19,25 +26,54 @@ const ChatController = {
     this.cacheElements();
     this.initState();
     this.bindEvents();
+    this.loadModelStatus();
     this.loadSessionHistory();
+    this.loadSavedMemories();
+    this.loadDocuments();
+    this.updateChatHintsVisibility();
   },
 
   cacheElements() {
     this.els.appLayout = document.getElementById('appLayout');
     this.els.sidebarToggle = document.getElementById('sidebarToggle');
-    this.els.chatMessages = document.querySelector('.chat-window');
-    this.els.chatWindow = document.getElementById('chatWindow');
+    this.els.chatMessages = document.querySelector('.chat-window'); // scroll container
+    this.els.chatWindow = document.getElementById('chatWindow'); // messages-inner: append target
     this.els.messageInput = document.getElementById('messageInput');
     this.els.sendBtn = document.getElementById('sendBtn');
+    this.els.newSessionBtn = document.getElementById('newSessionBtn');
     this.els.clearBtn = document.getElementById('clearBtn');
     this.els.chatForm = document.getElementById('chatForm');
     this.els.jumpBottomBtn = document.getElementById('jumpBottomBtn');
     this.els.chatOwl = document.getElementById('chatOwl');
     this.els.owl = document.querySelector('.owl-icon-wrap');
-    this.els.modeButtons = document.querySelectorAll('.mode-button');
-    this.els.mindMode = document.getElementById('mindMode');
     this.els.sidebarHistoryList = document.getElementById('sidebarHistoryList');
     this.els.thinkingStep = document.getElementById('thinkingStep');
+    this.els.chatHints = document.getElementById('chatHints');
+    this.els.modelUnavailableBanner = document.getElementById('modelUnavailableBanner');
+    this.els.mindMemoryBtn = document.getElementById('mindMemoryBtn');
+    this.els.mindMemoryLabel = document.getElementById('mindMemoryLabel');
+    this.els.memoryVisibilityPanel = document.getElementById('memoryVisibilityPanel');
+    this.els.memorySnippetsList = document.getElementById('memorySnippetsList');
+    this.els.memorySavedNotification = document.getElementById('memorySavedNotification');
+    this.els.memorySavedPreview = document.getElementById('memorySavedPreview');
+    this.els.savedMemoriesList = document.getElementById('savedMemoriesList');
+    this.els.savedMemoriesEmpty = document.getElementById('savedMemoriesEmpty');
+    this.els.documentsList = document.getElementById('documentsList');
+    this.els.documentsEmpty = document.getElementById('documentsEmpty');
+    this.els.documentUploadInput = document.getElementById('documentUploadInput');
+    this.els.documentUploadBtn = document.getElementById('documentUploadBtn');
+    this.els.documentUploadStatus = document.getElementById('documentUploadStatus');
+    this.els.documentSearchInput = document.getElementById('documentSearchInput');
+    this.els.documentsNoResults = document.getElementById('documentsNoResults');
+    this.els.documentExcerptPanel = document.getElementById('documentExcerptPanel');
+    this.els.documentExcerptTitle = document.getElementById('documentExcerptTitle');
+    this.els.documentExcerptBody = document.getElementById('documentExcerptBody');
+    this.els.documentExcerptClose = document.getElementById('documentExcerptClose');
+    this.els.onboardingScreen = document.getElementById('onboardingScreen');
+    this.els.onboardingModelReady = document.getElementById('onboardingModelReady');
+    this.els.onboardingModelNotice = document.getElementById('onboardingModelNotice');
+    this.els.onboardingStartBtn = document.getElementById('onboardingStartBtn');
+    this.els.onboardingHelpBtn = document.getElementById('onboardingHelpBtn');
   },
 
   initState() {
@@ -45,6 +81,310 @@ const ChatController = {
     sessionStorage.setItem('whisperleaf_session_id', this.state.sessionId);
     const collapsed = sessionStorage.getItem('wlSidebarCollapsed') === 'true';
     this.setSidebarCollapsed(collapsed);
+  },
+
+  async loadModelStatus() {
+    try {
+      const res = await fetch('/api/model/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      this.state.modelAvailable = data.model_available === true;
+      this.updateModelStatusUI();
+    } catch (_) {
+      this.state.modelAvailable = false;
+      this.updateModelStatusUI();
+    }
+  },
+
+  updateModelStatusUI() {
+    const banner = this.els.modelUnavailableBanner;
+    const onboardingReady = this.els.onboardingModelReady;
+    const onboardingNotice = this.els.onboardingModelNotice;
+    if (banner) {
+      if (this.state.modelAvailable) banner.classList.add('hidden');
+      else banner.classList.remove('hidden');
+    }
+    if (onboardingReady) {
+      if (this.state.modelAvailable) onboardingReady.classList.remove('hidden');
+      else onboardingReady.classList.add('hidden');
+    }
+    if (onboardingNotice) {
+      if (this.state.modelAvailable) onboardingNotice.classList.add('hidden');
+      else onboardingNotice.classList.remove('hidden');
+    }
+  },
+
+  updateMemoryIndicatorUI() {
+    const label = this.els.mindMemoryLabel;
+    if (!label) return;
+    const n = this.state.lastMemorySnippets.length;
+    label.textContent = n > 0 ? 'Using ' + n + ' saved memories' : 'Using saved memories';
+  },
+
+  renderMemorySnippetsList() {
+    const list = this.els.memorySnippetsList;
+    if (!list) return;
+    list.innerHTML = '';
+    const snippets = this.state.lastMemorySnippets || [];
+    snippets.forEach((text, i) => {
+      const li = document.createElement('li');
+      li.className = 'memory-snippet-item';
+      const content = String(text || '').trim() || '(no text)';
+      li.textContent = content;
+      const source = document.createElement('small');
+      source.textContent = 'Memory ' + (i + 1);
+      li.appendChild(source);
+      list.appendChild(li);
+    });
+  },
+
+  toggleMemoryVisibilityPanel() {
+    const panel = this.els.memoryVisibilityPanel;
+    const btn = this.els.mindMemoryBtn;
+    if (!panel || !btn) return;
+    const isOpen = !panel.classList.contains('hidden');
+    if (isOpen) {
+      panel.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+    } else {
+      this.renderMemorySnippetsList();
+      panel.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  },
+
+  async loadSavedMemories() {
+    const list = this.els.savedMemoriesList;
+    const empty = this.els.savedMemoriesEmpty;
+    if (!list) return;
+    try {
+      const res = await fetch('/api/memories?limit=200');
+      if (!res.ok) return;
+      const data = await res.json();
+      const memories = data.memories || [];
+      this.renderSavedMemoriesList(memories);
+      if (empty) {
+        empty.classList.toggle('hidden', memories.length > 0);
+      }
+    } catch (_) {
+      if (empty) empty.classList.remove('hidden');
+    }
+  },
+
+  renderSavedMemoriesList(memories) {
+    const list = this.els.savedMemoriesList;
+    if (!list) return;
+    list.innerHTML = '';
+    const maxPreview = 120;
+    (memories || []).forEach((m) => {
+      const li = document.createElement('li');
+      li.className = 'saved-memory-item';
+      const text = document.createElement('span');
+      text.className = 'saved-memory-text';
+      const content = (m.content || '').trim() || '(empty)';
+      text.textContent = content.length > maxPreview ? content.slice(0, maxPreview) + '\u2026' : content;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-delete-memory';
+      btn.textContent = 'Delete';
+      btn.setAttribute('aria-label', 'Delete this memory');
+      btn.dataset.memoryId = String(m.id);
+      btn.addEventListener('click', () => this.deleteMemory(m.id));
+      li.appendChild(text);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  },
+
+  async deleteMemory(memoryId) {
+    try {
+      const res = await fetch('/api/memory/' + encodeURIComponent(memoryId), { method: 'DELETE' });
+      if (!res.ok) return;
+      await this.loadSavedMemories();
+    } catch (_) {}
+  },
+
+  async loadDocuments() {
+    const list = this.els.documentsList;
+    const empty = this.els.documentsEmpty;
+    if (!list) return;
+    try {
+      const res = await fetch('/api/documents');
+      if (!res.ok) return;
+      const data = await res.json();
+      const documents = data.documents || [];
+      this.state.documents = documents;
+      this.renderDocumentsList();
+      this.updateChatHintsContent();
+      if (empty) empty.classList.toggle('hidden', documents.length > 0);
+    } catch (_) {
+      if (empty) empty.classList.remove('hidden');
+    }
+  },
+
+  filterDocumentsByQuery(documents, query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return documents || [];
+    return (documents || []).filter((doc) => {
+      const title = (doc.title || '').toLowerCase();
+      const filename = (doc.filename || '').toLowerCase();
+      return title.includes(q) || filename.includes(q);
+    });
+  },
+
+  renderDocumentsList() {
+    const list = this.els.documentsList;
+    const empty = this.els.documentsEmpty;
+    const noResults = this.els.documentsNoResults;
+    if (!list) return;
+    const query = (this.state.documentSearchQuery || '').trim();
+    const all = this.state.documents || [];
+    const filtered = this.filterDocumentsByQuery(all, query);
+    list.innerHTML = '';
+    filtered.forEach((doc) => {
+      const li = document.createElement('li');
+      li.className = 'document-item';
+      const info = document.createElement('div');
+      info.className = 'document-info';
+      const filename = document.createElement('div');
+      filename.className = 'document-filename';
+      filename.textContent = doc.title || doc.filename || doc.id || 'Document';
+      const meta = document.createElement('div');
+      meta.className = 'document-meta';
+      const date = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      meta.textContent = date ? 'Uploaded ' + date : (doc.chunks_count != null ? doc.chunks_count + ' chunks' : '');
+      info.appendChild(filename);
+      info.appendChild(meta);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-delete-document';
+      btn.textContent = 'Delete';
+      btn.setAttribute('aria-label', 'Delete this document');
+      btn.dataset.documentId = String(doc.id);
+      btn.addEventListener('click', () => this.deleteDocument(doc.id));
+      li.appendChild(info);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    if (empty) empty.classList.toggle('hidden', all.length > 0);
+    if (noResults) noResults.classList.toggle('hidden', all.length === 0 || filtered.length > 0);
+  },
+
+  async deleteDocument(documentId) {
+    try {
+      const res = await fetch('/api/documents/' + encodeURIComponent(documentId), { method: 'DELETE' });
+      if (!res.ok) return;
+      await this.loadDocuments();
+    } catch (_) {}
+  },
+
+  setDocumentUploadStatus(message, type) {
+    const el = this.els.documentUploadStatus;
+    if (!el) return;
+    if (this._documentUploadStatusTimer) {
+      clearTimeout(this._documentUploadStatusTimer);
+      this._documentUploadStatusTimer = null;
+    }
+    el.textContent = message || '';
+    el.classList.remove('hidden', 'error', 'success');
+    if (type === 'error') el.classList.add('error');
+    else if (type === 'success') el.classList.add('success');
+    if (!message) el.classList.add('hidden');
+  },
+
+  clearDocumentUploadStatusAfter(ms) {
+    const el = this.els.documentUploadStatus;
+    if (!el) return;
+    if (this._documentUploadStatusTimer) clearTimeout(this._documentUploadStatusTimer);
+    this._documentUploadStatusTimer = setTimeout(() => {
+      this.setDocumentUploadStatus('');
+      el.classList.add('hidden');
+      this._documentUploadStatusTimer = null;
+    }, ms);
+  },
+
+  async handleDocumentUpload(e) {
+    const input = e && e.target;
+    const file = input && input.files && input.files[0];
+    if (!file) return;
+    input.value = '';
+    const btn = this.els.documentUploadBtn;
+    if (btn) btn.disabled = true;
+    this.setDocumentUploadStatus('Uploading document...');
+    let processingTimer = setTimeout(() => {
+      this.setDocumentUploadStatus('Processing document...');
+      processingTimer = null;
+    }, 2000);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', file.name || '');
+    try {
+      const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
+      if (processingTimer) clearTimeout(processingTimer);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = err.detail || res.statusText || 'Unknown error';
+        const msg = typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail));
+        this.setDocumentUploadStatus('Upload failed: ' + msg, 'error');
+        this.clearDocumentUploadStatusAfter(5000);
+        if (btn) btn.disabled = false;
+        return;
+      }
+      this.setDocumentUploadStatus('Document indexed successfully.', 'success');
+      this.clearDocumentUploadStatusAfter(4000);
+      await this.loadDocuments();
+    } catch (err) {
+      if (processingTimer) clearTimeout(processingTimer);
+      this.setDocumentUploadStatus('Upload failed: ' + (err && err.message ? err.message : 'Network error'), 'error');
+      this.clearDocumentUploadStatusAfter(5000);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  showMemorySavedNotification(payload) {
+    const el = this.els.memorySavedNotification;
+    const preview = this.els.memorySavedPreview;
+    if (!el) return;
+    if (this._memorySavedNotificationTimer) {
+      clearTimeout(this._memorySavedNotificationTimer);
+      this._memorySavedNotificationTimer = null;
+    }
+    const text = (payload && payload.text) ? String(payload.text).trim() : '';
+    if (preview) {
+      preview.textContent = text || '';
+      preview.style.display = text ? 'block' : 'none';
+    }
+    el.classList.remove('hidden');
+    this._memorySavedNotificationTimer = setTimeout(() => {
+      el.classList.add('hidden');
+      this._memorySavedNotificationTimer = null;
+    }, 5000);
+  },
+
+  showDocumentExcerptPreview(name, snippets) {
+    const panel = this.els.documentExcerptPanel;
+    const titleEl = this.els.documentExcerptTitle;
+    const bodyEl = this.els.documentExcerptBody;
+    if (!panel || !titleEl || !bodyEl) return;
+    titleEl.textContent = name || 'Document';
+    bodyEl.innerHTML = '';
+    if (snippets && snippets.length > 0) {
+      snippets.forEach((text) => {
+        const chunk = document.createElement('div');
+        chunk.className = 'excerpt-chunk';
+        chunk.textContent = text;
+        bodyEl.appendChild(chunk);
+      });
+    } else {
+      bodyEl.textContent = 'No excerpt available.';
+    }
+    panel.classList.remove('hidden');
+  },
+
+  hideDocumentExcerptPreview() {
+    const panel = this.els.documentExcerptPanel;
+    if (panel) panel.classList.add('hidden');
   },
 
   setSidebarCollapsed(collapsed) {
@@ -70,7 +410,7 @@ const ChatController = {
   },
 
   bindEvents() {
-    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, chatOwl, modeButtons, appLayout, sidebarToggle } = this.els;
+    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle } = this.els;
 
     if (sidebarToggle && appLayout) {
       sidebarToggle.addEventListener('click', () => {
@@ -92,12 +432,16 @@ const ChatController = {
 
     if (messageInput) {
       messageInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') return;
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           this.sendMessage();
         }
       });
       messageInput.addEventListener('input', () => this.autoResizeInput());
+      messageInput.addEventListener('paste', () => {
+        setTimeout(() => this.autoResizeInput(), 0);
+      });
     }
 
     if (chatMessages && jumpBottomBtn) {
@@ -109,6 +453,40 @@ const ChatController = {
     }
 
     if (clearBtn) clearBtn.addEventListener('click', () => this.clearSession());
+    if (newSessionBtn) newSessionBtn.addEventListener('click', () => this.newSession());
+
+    const onboardingStartBtn = this.els.onboardingStartBtn;
+    if (onboardingStartBtn) onboardingStartBtn.addEventListener('click', () => this.dismissOnboarding());
+    const onboardingHelpBtn = this.els.onboardingHelpBtn;
+    if (onboardingHelpBtn) onboardingHelpBtn.addEventListener('click', () => this.reopenOnboarding());
+
+    const mindMemoryBtn = this.els.mindMemoryBtn;
+    if (mindMemoryBtn) {
+      mindMemoryBtn.addEventListener('click', () => this.toggleMemoryVisibilityPanel());
+    }
+
+    const documentUploadBtn = this.els.documentUploadBtn;
+    const documentUploadInput = this.els.documentUploadInput;
+    if (documentUploadBtn && documentUploadInput) {
+      documentUploadBtn.addEventListener('click', () => documentUploadInput.click());
+      documentUploadInput.addEventListener('change', (e) => this.handleDocumentUpload(e));
+    }
+    const documentSearchInput = this.els.documentSearchInput;
+    if (documentSearchInput) {
+      documentSearchInput.addEventListener('input', () => {
+        this.state.documentSearchQuery = documentSearchInput.value || '';
+        this.renderDocumentsList();
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
+        if (messageInput && document.activeElement === messageInput) return;
+        if (documentSearchInput) {
+          e.preventDefault();
+          documentSearchInput.focus();
+        }
+      }
+    });
 
     const listEl = this.els.sidebarHistoryList;
     if (listEl) {
@@ -121,33 +499,64 @@ const ChatController = {
       });
     }
 
-    if (modeButtons && modeButtons.length) {
-      modeButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-          modeButtons.forEach((b) => b.classList.remove('active'));
-          btn.classList.add('active');
-          this.state.selectedMode = btn.getAttribute('data-mode') || 'system';
-          if (this.els.mindMode) this.els.mindMode.textContent = btn.textContent.trim();
-        });
+    const chatWindow = this.els.chatWindow;
+    if (chatWindow) {
+      chatWindow.addEventListener('click', (e) => {
+        const btn = e.target.closest('.source-link');
+        if (!btn) return;
+        e.preventDefault();
+        const name = btn.getAttribute('data-source-name') || '';
+        const sourcesEl = btn.closest('.message-sources');
+        if (!sourcesEl || !name) return;
+        const raw = sourcesEl.getAttribute('data-doc-excerpts');
+        let excerpts = [];
+        try {
+          excerpts = raw ? JSON.parse(raw) : [];
+        } catch (_) {}
+        const snippets = excerpts
+          .filter((x) => (x.name || '').trim() === name)
+          .map((x) => (x.snippet || '').trim())
+          .filter(Boolean);
+        this.showDocumentExcerptPreview(name, snippets);
       });
-      const activeMode = document.querySelector('.mode-button.active');
-      if (this.els.mindMode && activeMode) this.els.mindMode.textContent = activeMode.textContent.trim();
     }
+
+    const excerptClose = this.els.documentExcerptClose;
+    const excerptPanel = this.els.documentExcerptPanel;
+    if (excerptClose && excerptPanel) {
+      excerptClose.addEventListener('click', () => this.hideDocumentExcerptPreview());
+      excerptPanel.addEventListener('click', (e) => {
+        if (e.target === excerptPanel) this.hideDocumentExcerptPreview();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && excerptPanel && !excerptPanel.classList.contains('hidden')) {
+          this.hideDocumentExcerptPreview();
+        }
+      });
+    }
+
   },
 
-  // --- Scroll
-  isNearBottom(container, threshold = 100) {
+  // --- Scroll: auto-scroll when appropriate; never force scroll when user is reading above.
+  // Threshold in px: user is "near bottom" if within this distance of the bottom.
+  NEAR_BOTTOM_THRESHOLD: 120,
+
+  isNearBottom(container, threshold) {
     if (!container) return true;
-    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    const t = threshold != null ? threshold : this.NEAR_BOTTOM_THRESHOLD;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= t;
   },
 
-  scrollToBottom(container) {
+  scrollToBottom(container, forceSmooth) {
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    const smooth = forceSmooth !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   },
 
   scrollToBottomIfNearBottom() {
-    if (this.isNearBottom(this.els.chatMessages)) this.scrollToBottom(this.els.chatMessages);
+    const container = this.els.chatMessages;
+    if (!container) return;
+    if (this.isNearBottom(container)) this.scrollToBottom(container);
   },
 
   updateScrollButtonVisibility() {
@@ -183,15 +592,18 @@ const ChatController = {
     if (this.els.sendBtn) this.els.sendBtn.disabled = sending;
   },
 
-  // --- Watchdog
+  // --- Watchdog (total time from send until stream done/error; local models can be slow on first run)
+  STREAM_WATCHDOG_MS: 120000,
+
   startWatchdog() {
     this.stopWatchdog();
     this.state.streamWatchdog = setTimeout(() => {
-      console.warn('Stream watchdog triggered');
+      console.warn('[WhisperLeaf] Stream watchdog triggered');
       this.stopThinking();
       this.clearThinkingStep();
+      this.setStreamingBubbleError('Response timed out. Local models can take longer on first run — try again in a moment.');
       this.setSendingState(false);
-    }, 25000);
+    }, this.STREAM_WATCHDOG_MS);
   },
 
   stopWatchdog() {
@@ -214,58 +626,117 @@ const ChatController = {
     bubble.appendChild(btn);
   },
 
-  // --- Message rendering
-  appendMessage(role, text, opts) {
-    if (!text && role !== 'assistant') return;
-    const { chatWindow } = this.els;
-    if (!chatWindow) return;
+  // --- Message list (single source of truth)
+  // Shape: { id, role, content, status } — status: 'complete' | 'streaming' | 'error'
+  generateMessageId() {
+    return 'msg-' + crypto.randomUUID();
+  },
 
-    const messageId = 'msg-' + (this.state.nextMessageId++);
+  addMessage(msg) {
+    this.state.messages.push(msg);
+    return msg;
+  },
+
+  getMessageById(id) {
+    return this.state.messages.find((m) => m.id === id) || null;
+  },
+
+  updateMessage(id, updates) {
+    const msg = this.getMessageById(id);
+    if (msg) Object.assign(msg, updates);
+  },
+
+  getHistoryForApi() {
+    return this.state.messages
+      .filter((m) => m.status === 'complete')
+      .map((m) => ({ role: m.role, content: m.content || '' }));
+  },
+
+  createMessageEl(msg) {
     const div = document.createElement('div');
-    div.className = 'message ' + role;
-    div.setAttribute('data-message-id', messageId);
-    if (role === 'assistant') {
+    div.className = 'message ' + msg.role + (msg.status === 'error' ? ' error' : '');
+    div.setAttribute('data-message-id', msg.id);
+    if (msg.role === 'user') {
+      div.textContent = msg.content || '';
+    } else if (msg.status === 'error') {
+      div.textContent = msg.content || 'Error';
+    } else if (msg.status === 'streaming') {
+      const textSpan = document.createElement('span');
+      textSpan.className = 'streaming-text';
+      textSpan.textContent = msg.content || '';
+      const cursorSpan = document.createElement('span');
+      cursorSpan.className = 'streaming-cursor';
+      cursorSpan.textContent = '\u258C';
+      div.appendChild(textSpan);
+      div.appendChild(cursorSpan);
+    } else {
       const wrap = document.createElement('div');
       wrap.className = 'message-wrap';
+      const bodyWrap = document.createElement('div');
+      bodyWrap.className = 'message-body-wrap';
       const body = document.createElement('span');
       body.className = 'message-body';
-      body.textContent = text || '';
-      wrap.appendChild(body);
+      body.textContent = msg.content || '';
+      bodyWrap.appendChild(body);
+      const ctx = msg.contextUsed;
+      if (ctx && ctx.docSources && ctx.docSources.length > 0) {
+        const sourcesEl = document.createElement('div');
+        sourcesEl.className = 'message-sources';
+        sourcesEl.setAttribute('data-doc-excerpts', JSON.stringify(ctx.docExcerpts || []));
+        const prefix = document.createTextNode('Sources: ');
+        sourcesEl.appendChild(prefix);
+        ctx.docSources.forEach((name, i) => {
+          if (i > 0) sourcesEl.appendChild(document.createTextNode(', '));
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'source-link';
+          btn.textContent = name;
+          btn.setAttribute('data-source-name', name);
+          btn.setAttribute('title', 'Preview excerpt');
+          sourcesEl.appendChild(btn);
+        });
+        bodyWrap.appendChild(sourcesEl);
+      }
+      if (ctx) {
+        const contextEl = this.createContextPanel(ctx);
+        if (contextEl) bodyWrap.appendChild(contextEl);
+      }
+      wrap.appendChild(bodyWrap);
       this.addCopyButtonToBubble(wrap, () => body.textContent);
       div.appendChild(wrap);
-    } else {
-      div.textContent = text || '';
     }
-    chatWindow.appendChild(div);
-    if (role === 'user' && !(opts && opts.skipSidebarRefresh)) this.refreshSidebarHistory();
+    return div;
+  },
+
+  appendMessageEl(msg) {
+    const { chatWindow } = this.els;
+    if (!chatWindow) return;
+    chatWindow.appendChild(this.createMessageEl(msg));
+    this.updateChatHintsVisibility();
     this.scrollToBottomIfNearBottom();
     this.updateScrollButtonVisibility();
   },
 
-  createStreamingBubble() {
+  syncDomFromMessages() {
     const { chatWindow } = this.els;
-    if (!chatWindow) return null;
-
-    const messageId = 'msg-' + (this.state.nextMessageId++);
-    const div = document.createElement('div');
-    div.className = 'message assistant';
-    div.setAttribute('data-message-id', messageId);
-    const textSpan = document.createElement('span');
-    textSpan.className = 'streaming-text';
-    textSpan.textContent = '';
-    const cursorSpan = document.createElement('span');
-    cursorSpan.className = 'streaming-cursor';
-    cursorSpan.textContent = '\u258C';
-    div.appendChild(textSpan);
-    div.appendChild(cursorSpan);
-    chatWindow.appendChild(div);
-    this.state.currentStreamingBubble = div;
+    if (!chatWindow) return;
+    chatWindow.innerHTML = '';
+    for (const msg of this.state.messages) {
+      chatWindow.appendChild(this.createMessageEl(msg));
+    }
+    this.updateChatHintsVisibility();
+    this.refreshSidebarHistory();
     this.scrollToBottomIfNearBottom();
-    return div;
+    this.updateScrollButtonVisibility();
+  },
+
+  getStreamingBubbleEl() {
+    const id = this.state.currentStreamingId;
+    return id ? document.querySelector(`[data-message-id="${id}"]`) : null;
   },
 
   updateStreamingBubble(textChunk) {
-    const bubble = this.state.currentStreamingBubble;
+    const bubble = this.getStreamingBubbleEl();
     if (!bubble) return;
     const textEl = bubble.querySelector('.streaming-text');
     if (textEl) textEl.textContent = textChunk;
@@ -273,33 +744,160 @@ const ChatController = {
     this.updateScrollButtonVisibility();
   },
 
+  buildContextUsed() {
+    const memorySnippets = (this.state.lastMemorySnippets || []).slice();
+    const docSources = (this.state.docSourcesForCurrentResponse || []).slice();
+    const docExcerpts = (this.state.docExcerptsForCurrentResponse || []).map((e) => ({ name: e.name, snippet: e.snippet }));
+    const hasAny = memorySnippets.length > 0 || docSources.length > 0;
+    return hasAny ? { memorySnippets, docSources, docExcerpts } : null;
+  },
+
+  createContextPanel(contextUsed) {
+    if (!contextUsed || (contextUsed.memorySnippets.length === 0 && contextUsed.docSources.length === 0)) return null;
+    const panel = document.createElement('div');
+    panel.className = 'message-context-panel';
+    const summary = document.createElement('button');
+    summary.type = 'button';
+    summary.className = 'message-context-summary';
+    summary.setAttribute('aria-expanded', 'false');
+    const memCount = contextUsed.memorySnippets.length;
+    const docCount = contextUsed.docSources.length;
+    const parts = [];
+    if (memCount) parts.push(memCount + ' ' + (memCount === 1 ? 'memory' : 'memories'));
+    if (docCount) parts.push(docCount + ' ' + (docCount === 1 ? 'document' : 'documents'));
+    const excerptCount = (contextUsed.docExcerpts || []).length;
+    if (excerptCount) parts.push(excerptCount + ' ' + (excerptCount === 1 ? 'excerpt' : 'excerpts'));
+    summary.textContent = 'Context used: ' + (parts.length ? parts.join(', ') : '—');
+    panel.appendChild(summary);
+    const details = document.createElement('div');
+    details.className = 'message-context-details hidden';
+    if (contextUsed.memorySnippets && contextUsed.memorySnippets.length > 0) {
+      const memHead = document.createElement('div');
+      memHead.className = 'message-context-details-heading';
+      memHead.textContent = 'Memories';
+      details.appendChild(memHead);
+      const memList = document.createElement('ul');
+      memList.className = 'message-context-snippets-list';
+      contextUsed.memorySnippets.forEach((text) => {
+        const li = document.createElement('li');
+        li.className = 'message-context-snippet';
+        li.textContent = (text || '').trim() || '(no text)';
+        memList.appendChild(li);
+      });
+      details.appendChild(memList);
+    }
+    if (contextUsed.docSources && contextUsed.docSources.length > 0) {
+      const docHead = document.createElement('div');
+      docHead.className = 'message-context-details-heading';
+      docHead.textContent = 'Documents';
+      details.appendChild(docHead);
+      const excerptsByDoc = {};
+      (contextUsed.docExcerpts || []).forEach((e) => {
+        const n = (e.name || '').trim();
+        if (!n) return;
+        if (!excerptsByDoc[n]) excerptsByDoc[n] = [];
+        excerptsByDoc[n].push((e.snippet || '').trim());
+      });
+      contextUsed.docSources.forEach((name) => {
+        const block = document.createElement('div');
+        block.className = 'message-context-doc-block';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'message-context-doc-name';
+        nameEl.textContent = name;
+        block.appendChild(nameEl);
+        const snippets = excerptsByDoc[name] || [];
+        snippets.forEach((text) => {
+          const pre = document.createElement('div');
+          pre.className = 'message-context-snippet';
+          pre.textContent = text || '(no text)';
+          block.appendChild(pre);
+        });
+        details.appendChild(block);
+      });
+    }
+    panel.appendChild(details);
+    summary.addEventListener('click', () => {
+      const expanded = details.classList.toggle('hidden');
+      summary.setAttribute('aria-expanded', String(!expanded));
+    });
+    return panel;
+  },
+
   finalizeStreamingBubble() {
-    const bubble = this.state.currentStreamingBubble;
-    if (bubble) {
+    const id = this.state.currentStreamingId;
+    const msg = id ? this.getMessageById(id) : null;
+    const bubble = this.getStreamingBubbleEl();
+    if (bubble && msg) {
+      msg.status = 'complete';
       const cursor = bubble.querySelector('.streaming-cursor');
       if (cursor) cursor.remove();
       const textEl = bubble.querySelector('.streaming-text');
-      const content = textEl ? textEl.textContent : '';
+      const content = textEl ? textEl.textContent : (msg.content || '');
+      msg.content = content;
+      const contextUsed = this.buildContextUsed();
+      if (contextUsed) msg.contextUsed = contextUsed;
       const wrap = document.createElement('div');
       wrap.className = 'message-wrap';
+      const bodyWrap = document.createElement('div');
+      bodyWrap.className = 'message-body-wrap';
       const body = document.createElement('span');
       body.className = 'message-body';
       body.textContent = content;
-      wrap.appendChild(body);
+      bodyWrap.appendChild(body);
+      const sources = this.state.docSourcesForCurrentResponse || [];
+      const excerpts = this.state.docExcerptsForCurrentResponse || [];
+      if (sources.length > 0) {
+        const sourcesEl = document.createElement('div');
+        sourcesEl.className = 'message-sources';
+        sourcesEl.setAttribute('data-doc-excerpts', JSON.stringify(excerpts));
+        const prefix = document.createTextNode('Sources: ');
+        sourcesEl.appendChild(prefix);
+        sources.forEach((name, i) => {
+          if (i > 0) sourcesEl.appendChild(document.createTextNode(', '));
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'source-link';
+          btn.textContent = name;
+          btn.setAttribute('data-source-name', name);
+          btn.setAttribute('title', 'Preview excerpt');
+          sourcesEl.appendChild(btn);
+        });
+        bodyWrap.appendChild(sourcesEl);
+      }
+      if (contextUsed) {
+        const contextEl = this.createContextPanel(contextUsed);
+        if (contextEl) bodyWrap.appendChild(contextEl);
+      }
+      this.state.docSourcesForCurrentResponse = [];
+      this.state.docExcerptsForCurrentResponse = [];
+      wrap.appendChild(bodyWrap);
       this.addCopyButtonToBubble(wrap, () => body.textContent);
       bubble.innerHTML = '';
       bubble.appendChild(wrap);
+    } else {
+      this.state.docSourcesForCurrentResponse = [];
+      this.state.docExcerptsForCurrentResponse = [];
     }
-    this.state.currentStreamingBubble = null;
+    this.state.currentStreamingId = null;
+    this.scrollToBottomIfNearBottom();
+    this.updateScrollButtonVisibility();
   },
 
   setStreamingBubbleError(message) {
-    const bubble = this.state.currentStreamingBubble;
+    const id = this.state.currentStreamingId;
+    const msg = id ? this.getMessageById(id) : null;
+    const bubble = this.getStreamingBubbleEl();
+    if (msg) {
+      msg.status = 'error';
+      msg.content = message || 'Error';
+    }
     if (bubble) {
       bubble.className = 'message error';
       bubble.textContent = message || 'Error';
     }
-    this.finalizeStreamingBubble();
+    this.state.currentStreamingId = null;
+    this.scrollToBottomIfNearBottom();
+    this.updateScrollButtonVisibility();
   },
 
   // --- SSE parsing
@@ -312,7 +910,7 @@ const ChatController = {
       if (trimmed.startsWith('event:')) {
         event = trimmed.replace(/^event:\s*/, '').trim();
       } else if (trimmed.startsWith('data:')) {
-        dataLines.push(trimmed.replace(/^data:\s?/, ''));
+        dataLines.push(trimmed.length > 5 ? trimmed.slice(6) : '');
       }
     }
     const data = dataLines.join('\n');
@@ -327,24 +925,20 @@ const ChatController = {
     return { blocks: parts, remainder };
   },
 
-  // --- Sidebar history (current-session navigator)
   refreshSidebarHistory() {
     const listEl = this.els.sidebarHistoryList;
-    const chatWindow = this.els.chatWindow;
-    if (!listEl || !chatWindow) return;
-
-    const userMessages = Array.from(chatWindow.querySelectorAll('.message.user[data-message-id]'));
+    if (!listEl) return;
+    const userMessages = this.state.messages.filter((m) => m.role === 'user' && m.status === 'complete');
     const recent = userMessages.slice(-8).reverse();
     const maxPreview = 50;
 
     listEl.innerHTML = '';
-    for (const el of recent) {
-      const id = el.getAttribute('data-message-id');
-      const raw = (el.textContent || '').trim();
+    for (const msg of recent) {
+      const raw = (msg.content || '').trim();
       const preview = raw.length > maxPreview ? raw.slice(0, maxPreview) + '\u2026' : raw;
       const li = document.createElement('li');
       li.className = 'sidebar-history-item';
-      li.setAttribute('data-target-message-id', id);
+      li.setAttribute('data-target-message-id', msg.id);
       li.textContent = preview || '(empty)';
       li.setAttribute('role', 'button');
       li.setAttribute('tabindex', '0');
@@ -359,6 +953,95 @@ const ChatController = {
 
   clearThinkingStep() {
     this.setThinkingStep('');
+  },
+
+  ONBOARDING_KEY: 'whisperleaf_seen_onboarding',
+
+  updateOnboardingVisibility() {
+    const onboarding = this.els.onboardingScreen;
+    const hints = this.els.chatHints;
+    const chatWindow = this.els.chatWindow;
+    if (!onboarding || !hints || !chatWindow) return;
+    const hasMessages = chatWindow.querySelectorAll('.message').length > 0;
+    let seen = false;
+    try {
+      seen = localStorage.getItem(this.ONBOARDING_KEY) === 'true';
+    } catch (_) {}
+    const show = this.state.forceShowOnboarding || (!seen && !hasMessages);
+    if (show) {
+      onboarding.classList.remove('hidden');
+      hints.classList.remove('visible');
+      hints.setAttribute('aria-hidden', 'true');
+    } else {
+      onboarding.classList.add('hidden');
+      hints.classList.add('visible');
+      hints.setAttribute('aria-hidden', 'false');
+    }
+  },
+
+  reopenOnboarding() {
+    this.state.forceShowOnboarding = true;
+    this.updateOnboardingVisibility();
+  },
+
+  dismissOnboarding() {
+    this.state.forceShowOnboarding = false;
+    try {
+      localStorage.setItem(this.ONBOARDING_KEY, 'true');
+    } catch (_) {}
+    this.updateOnboardingVisibility();
+    this.updateChatHintsContent();
+    const messageInput = this.els.messageInput;
+    if (messageInput) {
+      setTimeout(() => messageInput.focus(), 0);
+    }
+  },
+
+  updateChatHintsVisibility() {
+    const hints = this.els.chatHints;
+    const chatWindow = this.els.chatWindow;
+    if (!hints || !chatWindow) return;
+    const hasMessages = chatWindow.querySelectorAll('.message').length > 0;
+    this.updateOnboardingVisibility();
+    const onboardingVisible = this.els.onboardingScreen && !this.els.onboardingScreen.classList.contains('hidden');
+    hints.classList.toggle('visible', !onboardingVisible && !hasMessages);
+    hints.setAttribute('aria-hidden', onboardingVisible || hasMessages ? 'true' : 'false');
+  },
+
+  updateChatHintsContent() {
+    const hints = this.els.chatHints;
+    if (!hints) return;
+    const docs = this.state.documents || [];
+    const names = docs.map((d) => (d.title || d.filename || d.id || '').trim()).filter(Boolean);
+    const first = names[0];
+    const second = names[1];
+    const p = document.createElement('p');
+    p.textContent = 'Ask WhisperLeaf anything';
+    const ul = document.createElement('ul');
+    if (names.length > 0) {
+      const li1 = document.createElement('li');
+      li1.textContent = 'Ask about your uploaded documents';
+      ul.appendChild(li1);
+      if (first) {
+        const li2 = document.createElement('li');
+        li2.textContent = 'Summarize ' + first;
+        ul.appendChild(li2);
+      }
+      if (second) {
+        const li3 = document.createElement('li');
+        li3.textContent = "What's in " + second + '?';
+        ul.appendChild(li3);
+      }
+    } else {
+      ['Summarize a document', 'Help me think through a decision', 'Search my local knowledge'].forEach((text) => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        ul.appendChild(li);
+      });
+    }
+    hints.innerHTML = '';
+    hints.appendChild(p);
+    hints.appendChild(ul);
   },
 
   scrollToMessageAnchor(messageId) {
@@ -376,7 +1059,6 @@ const ChatController = {
     el._highlightTimer = t;
   },
 
-  // --- Session
   async loadSessionHistory() {
     try {
       const res = await fetch(`/api/chat/history?session_id=${encodeURIComponent(this.state.sessionId)}`);
@@ -384,14 +1066,18 @@ const ChatController = {
       const data = await res.json();
       const list = data.history || [];
       if (list.length === 0) return;
-      this.els.chatWindow.innerHTML = '';
-      this.state.history = list;
-      for (const msg of list) {
-        if (msg.role) this.appendMessage(msg.role, msg.content || '', { skipSidebarRefresh: true });
-      }
-      this.refreshSidebarHistory();
-      if (this.state.history.length > 0) this.scrollToBottomIfNearBottom();
+      this.state.messages = list
+        .filter((m) => m.role)
+        .map((m) => ({
+          id: this.generateMessageId(),
+          role: m.role,
+          content: m.content || '',
+          status: 'complete',
+        }));
+      this.syncDomFromMessages();
+      this.scrollToBottom(this.els.chatMessages);
       this.updateScrollButtonVisibility();
+      this.updateChatHintsVisibility();
     } catch (_) {}
   },
 
@@ -403,17 +1089,46 @@ const ChatController = {
         body: JSON.stringify({ session_id: this.state.sessionId }),
       });
     } catch (_) {}
-    this.els.chatWindow.innerHTML = '';
-    this.state.history = [];
-    this.refreshSidebarHistory();
+    this.state.currentStreamingId = null;
+    this.state.currentStreamId = null;
+    this.state.messages = [];
+    this.syncDomFromMessages();
+  },
+
+  newSession() {
+    const prevId = this.state.sessionId;
+    try {
+      fetch('/api/chat/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: prevId }),
+      }).catch(() => {});
+    } catch (_) {}
+    this.state.sessionId = crypto.randomUUID();
+    try {
+      sessionStorage.setItem('whisperleaf_session_id', this.state.sessionId);
+    } catch (_) {}
+    this.state.currentStreamingId = null;
+    this.state.currentStreamId = null;
+    this.state.messages = [];
+    this.syncDomFromMessages();
+    const input = this.els.messageInput;
+    if (input) {
+      input.focus();
+    }
   },
 
   // --- Stream response (reader loop)
-  async streamAssistantResponse(response) {
+  // streamId: active stream guard — chunks from an older stream are ignored so only the latest response writes to the UI.
+  async streamAssistantResponse(response, streamId) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let fullReply = '';
     let buffer = '';
+    let firstChunkLogged = false;
+    let chunkDebugCount = 0;
+
+    const isActiveStream = () => streamId === this.state.currentStreamId;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -429,85 +1144,214 @@ const ChatController = {
 
         if (event === 'chunk' && data !== undefined) {
           fullReply += data;
-          this.updateStreamingBubble(fullReply);
-          this.clearThinkingStep();
+          if (!firstChunkLogged && typeof console !== 'undefined' && console.log) {
+            console.log('[WhisperLeaf] first SSE chunk received, len=', data.length);
+            firstChunkLogged = true;
+          }
+          if (typeof console !== 'undefined' && console.log && chunkDebugCount < 3) {
+            console.log('[WhisperLeaf debug] chunk data:', JSON.stringify(data), 'fullReply len:', fullReply.length);
+            chunkDebugCount += 1;
+          }
+          if (isActiveStream()) {
+            this.setSendingState(false);
+            const sid = this.state.currentStreamingId;
+            if (sid) this.updateMessage(sid, { content: fullReply });
+            this.updateStreamingBubble(fullReply);
+            this.clearThinkingStep();
+          }
         } else if (event === 'status') {
-          try {
-            const payload = typeof data === 'string' ? JSON.parse(data) : data;
-            const step = payload && payload.step;
-            const query = (payload && payload.query) || '';
-            if (step === 'memory_search') {
-              const short = String(query).trim().slice(0, 40);
-              this.setThinkingStep(short ? `Searching memory: ${short}${short.length >= 40 ? '\u2026' : ''}` : 'Searching memory\u2026');
-            }
-          } catch (_) {}
+          if (isActiveStream()) {
+            try {
+              const payload = typeof data === 'string' ? JSON.parse(data) : data;
+              const step = payload && payload.step;
+              const query = (payload && payload.query) || '';
+              if (step === 'memory_search') {
+                const short = String(query).trim().slice(0, 40);
+                this.setThinkingStep(short ? `Searching memory: ${short}${short.length >= 40 ? '\u2026' : ''}` : 'Searching memory\u2026');
+              }
+            } catch (_) {}
+          }
+        } else if (event === 'meta') {
+          if (isActiveStream()) {
+            try {
+              const payload = typeof data === 'string' ? JSON.parse(data) : data;
+              if (payload && payload.used_memory && Array.isArray(payload.snippets)) {
+                this.state.lastMemorySnippets = payload.snippets;
+                this.updateMemoryIndicatorUI();
+                if (this.els.memoryVisibilityPanel && !this.els.memoryVisibilityPanel.classList.contains('hidden')) {
+                  this.renderMemorySnippetsList();
+                }
+              }
+            } catch (_) {}
+          }
+        } else if (event === 'memory_saved') {
+          if (isActiveStream()) {
+            try {
+              const payload = typeof data === 'string' ? JSON.parse(data) : data;
+              this.showMemorySavedNotification(payload || {});
+              this.loadSavedMemories();
+            } catch (_) {}
+          }
+        } else if (event === 'doc_sources') {
+          if (isActiveStream()) {
+            try {
+              const payload = typeof data === 'string' ? JSON.parse(data) : data;
+              const list = payload && Array.isArray(payload.sources) ? payload.sources : [];
+              this.state.docSourcesForCurrentResponse = list.map((s) => String(s).trim()).filter(Boolean);
+              const excerpts = payload && Array.isArray(payload.excerpts) ? payload.excerpts : [];
+              this.state.docExcerptsForCurrentResponse = excerpts.map((e) => ({
+                name: String(e.name || '').trim(),
+                snippet: String(e.snippet || '').trim(),
+              })).filter((e) => e.name || e.snippet);
+            } catch (_) {}
+          }
         } else if (event === 'done') {
+          if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] SSE done, reply_len=', fullReply.length);
           this.stopWatchdog();
           this.stopThinking();
           this.clearThinkingStep();
-          this.state.history.push({ role: 'assistant', content: fullReply || '' });
-          this.finalizeStreamingBubble();
+          if (isActiveStream()) {
+            if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf debug] final frontend text before render (first 120):', JSON.stringify((fullReply || '').slice(0, 120)));
+            if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
+            else this.finalizeStreamingBubble();
+          } else {
+            if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] Stale stream done, ignored.');
+          }
           return;
         } else if (event === 'error') {
+          if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] SSE error:', (data || '').trim() || 'Error');
           this.stopWatchdog();
           this.stopThinking();
           this.clearThinkingStep();
-          this.setStreamingBubbleError((data || '').trim() || 'Error');
+          if (isActiveStream()) {
+            this.setStreamingBubbleError((data || '').trim() || 'Error');
+          } else {
+            if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] Stale stream error, ignored.');
+          }
           return;
         }
       }
     }
 
     if (buffer.trim()) {
-      const parsed = this.parseSSEBlock(buffer);
-      if (parsed !== null) {
-        const { event, data } = parsed;
+      const remainderBlocks = buffer.split(/\n\n+/);
+      for (let i = 0; i < remainderBlocks.length; i++) {
+        const parsed = this.parseSSEBlock(remainderBlocks[i]);
+        if (parsed === null) continue;
+        const event = parsed.event;
+        const data = parsed.data;
         if (event === 'chunk' && data !== undefined) {
           fullReply += data;
-          this.updateStreamingBubble(fullReply);
+          if (isActiveStream()) {
+            this.setSendingState(false);
+            const sid = this.state.currentStreamingId;
+            if (sid) this.updateMessage(sid, { content: fullReply });
+            this.updateStreamingBubble(fullReply);
+            this.clearThinkingStep();
+          }
+        } else if (event === 'done') {
+          this.stopWatchdog();
+          this.stopThinking();
           this.clearThinkingStep();
+          if (isActiveStream()) {
+            if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
+            else this.finalizeStreamingBubble();
+          }
+          return;
         } else if (event === 'error') {
           this.stopWatchdog();
           this.stopThinking();
           this.clearThinkingStep();
-          this.setStreamingBubbleError((data || '').trim() || 'Error');
+          if (isActiveStream()) {
+            this.setStreamingBubbleError((data || '').trim() || 'Error');
+          }
           return;
         }
       }
     }
 
+    if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] stream reader done (no done event), reply_len=', fullReply.length);
     this.stopWatchdog();
     this.stopThinking();
     this.clearThinkingStep();
-    this.state.history.push({ role: 'assistant', content: fullReply || '' });
-    this.finalizeStreamingBubble();
+    if (isActiveStream()) {
+      if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
+      else this.finalizeStreamingBubble();
+    } else {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] Stale stream completed, ignored.');
+    }
   },
 
-  // --- Send (single path; request lock + watchdog)
   async sendMessage() {
     if (this.state.isSending) return;
-    const text = (this.els.messageInput?.value || '').trim();
-    if (!text) return;
-
     this.setSendingState(true);
+    const text = (this.els.messageInput?.value || '').trim();
+    if (!text) {
+      this.setSendingState(false);
+      return;
+    }
+    const streamId = crypto.randomUUID();
+    this.state.currentStreamId = streamId;
     this.els.messageInput.value = '';
     this.resetInputHeight();
-    this.appendMessage('user', text);
-    this.state.history.push({ role: 'user', content: text });
+
+    const streamingPrev = this.state.messages.filter((m) => m.status === 'streaming');
+    for (const m of streamingPrev) {
+      this.state.messages = this.state.messages.filter((x) => x.id !== m.id);
+      const el = document.querySelector(`[data-message-id="${m.id}"]`);
+      if (el) el.remove();
+    }
+    this.state.currentStreamingId = null;
+
+    const userMsg = { id: this.generateMessageId(), role: 'user', content: text, status: 'complete' };
+    this.addMessage(userMsg);
+    this.appendMessageEl(userMsg);
+    this.refreshSidebarHistory();
+
+    const assistantMsg = { id: this.generateMessageId(), role: 'assistant', content: '', status: 'streaming' };
+    this.addMessage(assistantMsg);
+    this.appendMessageEl(assistantMsg);
+    this.state.currentStreamingId = assistantMsg.id;
+    this.state.lastMemorySnippets = [];
+    this.state.docSourcesForCurrentResponse = [];
+    this.state.docExcerptsForCurrentResponse = [];
+    this.updateMemoryIndicatorUI();
+    if (this.els.memoryVisibilityPanel) this.els.memoryVisibilityPanel.classList.add('hidden');
+    if (this.els.mindMemoryBtn) this.els.mindMemoryBtn.setAttribute('aria-expanded', 'false');
+
+    this.scrollToBottom(this.els.chatMessages);
+    this.updateScrollButtonVisibility();
     this.startThinking();
     this.setThinkingStep('Thinking\u2026');
-    this.createStreamingBubble();
     this.startWatchdog();
 
+    const abortController = new AbortController();
+    const onAbort = () => {
+      this.stopWatchdog();
+      this.stopThinking();
+      this.clearThinkingStep();
+      this.setStreamingBubbleError('Request cancelled.');
+      this.setSendingState(false);
+    };
+    const abort = () => {
+      abortController.abort();
+      window.removeEventListener('beforeunload', abort);
+      window.removeEventListener('pagehide', abort);
+    };
+    window.addEventListener('beforeunload', abort);
+    window.addEventListener('pagehide', abort);
+
     try {
+      if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] sending message to /api/chat');
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: this.state.history,
+          history: this.getHistoryForApi(),
           session_id: this.state.sessionId,
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -515,7 +1359,11 @@ const ChatController = {
         this.stopThinking();
         this.clearThinkingStep();
         const err = await res.json().catch(() => ({}));
-        this.setStreamingBubbleError(err.detail || 'Request failed');
+        let msg = err.detail;
+        if (Array.isArray(msg)) msg = (msg[0] && msg[0].msg) ? msg[0].msg : 'Request failed';
+        if (typeof msg !== 'string') msg = 'Request failed';
+        if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] request failed', res.status, err);
+        this.setStreamingBubbleError(msg || 'Request failed');
         return;
       }
 
@@ -527,13 +1375,19 @@ const ChatController = {
         return;
       }
 
-      await this.streamAssistantResponse(res);
+      await this.streamAssistantResponse(res, streamId);
     } catch (e) {
+      if (e && e.name === 'AbortError') {
+        onAbort();
+        return;
+      }
       this.stopWatchdog();
       this.stopThinking();
       this.clearThinkingStep();
       this.setStreamingBubbleError('Network error: ' + (e && e.message ? e.message : 'Unknown error'));
     } finally {
+      window.removeEventListener('beforeunload', abort);
+      window.removeEventListener('pagehide', abort);
       this.clearThinkingStep();
       this.setSendingState(false);
     }

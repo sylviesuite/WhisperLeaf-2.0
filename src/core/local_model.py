@@ -62,6 +62,7 @@ class LocalModelClient:
             "model": self.model_name,
             "messages": full_messages,
             "stream": False,
+            "options": {"num_ctx": 4096},
         }
 
         model_endpoint = f"{self.base_url}/api/chat"
@@ -108,6 +109,7 @@ class LocalModelClient:
             "model": self.model_name,
             "messages": full_messages,
             "stream": True,
+            "options": {"num_ctx": 4096},
         }
         model_endpoint = f"{self.base_url}/api/chat"
 
@@ -115,6 +117,7 @@ class LocalModelClient:
             async with client.stream("POST", model_endpoint, json=payload) as resp:
                 resp.raise_for_status()
                 buffer = ""
+                chunk_count = 0
                 async for chunk in resp.aiter_text():
                     buffer += chunk
                     while "\n" in buffer:
@@ -127,7 +130,12 @@ class LocalModelClient:
                         except json.JSONDecodeError:
                             continue
                         msg = data.get("message") or {}
-                        content = msg.get("content") or ""
-                        if content:
+                        content = msg.get("content") or data.get("response") or data.get("delta") or ""
+                        if content is not None and content != "":
+                            chunk_count += 1
+                            if chunk_count <= 3:
+                                print("[WhisperLeaf debug] raw chunk from Ollama: %r" % content)
                             yield content
+                if chunk_count == 0:
+                    print("[WhisperLeaf model] chat_stream received 0 content chunks from %s (check model name: %s)" % (model_endpoint, self.model_name))
 

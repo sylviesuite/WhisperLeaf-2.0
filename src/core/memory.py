@@ -253,6 +253,59 @@ def set_visibility(memory_id: int, visibility: str) -> bool:
     return True
 
 
+def get_memory_count() -> int:
+    """Return total number of memory entries. Safe: returns 0 if DB missing or on error."""
+    if not _DB_PATH:
+        return 0
+    try:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT COUNT(*) FROM memories").fetchone()
+            return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def list_memories(
+    limit: int = 200,
+    exclude_blocked: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Return memories for management UI (newest first).
+    Same shape as get_recent_memory_entries; does not record audit.
+    """
+    if not _DB_PATH:
+        return []
+    where = "WHERE visibility != 'blocked'" if exclude_blocked else ""
+    with _get_conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT id, content, visibility, source, created_at FROM memories {where} ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "content": row["content"],
+            "visibility": row["visibility"],
+            "source": row["source"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def delete_memory(memory_id: int) -> bool:
+    """Delete a memory by id. Records 'deleted' audit before removal. Returns True if deleted."""
+    if not _DB_PATH:
+        return False
+    if get_memory(memory_id) is None:
+        return False
+    record_audit(memory_id, "deleted")
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+        return cur.rowcount > 0
+
+
 def get_memory(memory_id: int) -> Optional[Dict[str, Any]]:
     """Return one memory by id or None."""
     if not _DB_PATH:

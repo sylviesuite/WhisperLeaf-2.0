@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import uuid
 from typing import List, Optional, Dict, Any, Literal
 
@@ -49,15 +50,18 @@ from .memory import (
     save_memory,
     get_recent_memories,
     get_recent_memory_entries,
+    get_memory_count,
     search_memories_by_query,
     set_visibility as memory_set_visibility,
     get_audit_events,
     get_memory,
+    list_memories,
+    delete_memory,
     record_audit,
     VISIBILITY_VALUES,
 )
 from .tools_registry import register_tool, list_tools, call_tool
-from .tools import tool_bus, register_memory_search_tool
+from .tools import tool_bus, register_memory_search_tool, register_docs_search_tool, register_system_status_tool
 
 # -------------------------------------------------------------------
 # FastAPI app + middleware
@@ -76,6 +80,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Backend uptime for system.status
+_APP_START_TIME = time.time()
 
 # -------------------------------------------------------------------
 # Paths, static files, templates, prompts
@@ -97,10 +104,35 @@ SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system.md"
 try:
     SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
 except FileNotFoundError:
-    SYSTEM_PROMPT = "You are WhisperLeaf, a privacy-first local AI assistant."
+    SYSTEM_PROMPT = (
+        "You are WhisperLeaf. You are a calm, thoughtful AI assistant that runs privately on the user's machine. "
+        "Help the user think clearly, explore ideas, solve problems, and reason carefully. "
+        "Prioritize clarity, independence, privacy, and thoughtful discussion. "
+        "Avoid corporate tone, unnecessary apologies, and mentioning training data or large tech companies. "
+        "Speak plainly and help the user think through ideas."
+    )
 
 # Local model client (Ollama / local LLM server)
 model_client = LocalModelClient()
+
+# Model availability: set by startup health check (do not block startup if unavailable)
+MODEL_AVAILABLE = False
+
+
+async def _check_model_health() -> None:
+    """Lightweight check that Ollama (or local model service) is reachable. Does not block startup."""
+    global MODEL_AVAILABLE
+    url = f"{model_client.base_url}/api/version"
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+        MODEL_AVAILABLE = True
+        print("[WhisperLeaf] Model service is available at %s" % model_client.base_url)
+    except Exception as e:
+        print("[WhisperLeaf] Model service not reachable at %s: %s. Start Ollama to use chat." % (model_client.base_url, e))
+        MODEL_AVAILABLE = False
+
 
 # Data / memory dirs
 DATA_DIR = PROJECT_ROOT / "data"
@@ -108,8 +140,18 @@ memory_manager = MemoryManager(data_dir=str(DATA_DIR))
 memory_search = MemorySearch(data_dir=str(DATA_DIR), memory_manager=memory_manager)
 register_memory_search_tool(memory_search)
 vault_manager = VaultManager()
-vector_store = VectorStore()
+vector_store = VectorStore(data_dir=str(DATA_DIR))
 document_processor = DocumentProcessor()
+DOCUMENTS_DIR = DATA_DIR / "documents"
+DOCUMENTS_INDEX_PATH = DOCUMENTS_DIR / "index.json"
+register_docs_search_tool(vector_store)
+register_system_status_tool(
+    model_name=model_client.model_name,
+    get_memory_count=get_memory_count,
+    get_docs_count=lambda: (vector_store.get_collection_stats() or {}).get("count", 0),
+    get_tools_count=lambda: len(list_tools()),
+    start_time=_APP_START_TIME,
+)
 
 
 def _register_tools() -> None:
@@ -173,6 +215,15 @@ async def startup_event() -> None:
     print("Sovereign AI API server started successfully")
 
 # -------------------------------------------------------------------
+# Startup: model health check (non-blocking; server still launches if Ollama is down)
+# -------------------------------------------------------------------
+
+@app.on_event("startup")
+async def startup_model_health_check():
+    await _check_model_health()
+
+
+# -------------------------------------------------------------------
 # Basic routes: status, home, chat UI
 # -------------------------------------------------------------------
 
@@ -180,6 +231,12 @@ async def startup_event() -> None:
 async def api_status():
     """Simple status endpoint (former JSON root)."""
     return {"message": "Sovereign AI API", "version": "1.0.0"}
+
+
+@app.get("/api/model/status")
+async def api_model_status():
+    """Model availability from startup health check. UI can show a message when unavailable."""
+    return {"model_available": MODEL_AVAILABLE}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -283,7 +340,19 @@ async def memory_chat(request: MemoryChatRequest):
 # -------------------------------------------------------------------
 
 # In-memory session persistence: session_id -> list of {role, content}
+# Capped to avoid unbounded growth; oldest session evicted when full.
+MAX_CHAT_SESSIONS = 500
 CHAT_SESSIONS: Dict[str, List[Dict[str, str]]] = {}
+
+
+def _evict_chat_session_if_needed(session_id: Optional[str]) -> None:
+    """If at cap and session_id is new, evict oldest session (insertion order)."""
+    if not session_id or session_id in CHAT_SESSIONS:
+        return
+    if len(CHAT_SESSIONS) >= MAX_CHAT_SESSIONS:
+        oldest = next(iter(CHAT_SESSIONS), None)
+        if oldest:
+            CHAT_SESSIONS.pop(oldest, None)
 
 Role = Literal["user", "assistant"]
 
@@ -302,6 +371,76 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     history: List[ChatMessage]
+
+
+# Max conversation messages sent to the model (last N only); ~12 exchanges = 24 messages
+MAX_CONTEXT_MESSAGES = 24
+
+# Session conversation summaries: session_id -> summary text (for context when history is trimmed)
+SESSION_SUMMARIES: Dict[str, str] = {}
+
+# Summarization prompt and limits
+SUMMARY_SYSTEM = (
+    "You are a concise summarizer. Summarize conversation excerpts. "
+    "Capture important facts, decisions, user goals, and key context. "
+    "Output only the summary, no preamble or labels."
+)
+MAX_SUMMARY_CHARS = 2000
+MAX_EXCERPT_CHARS_PER_MESSAGE = 600
+
+
+def _format_messages_for_summary(
+    messages: List[Dict[str, str]], max_per_message: int = MAX_EXCERPT_CHARS_PER_MESSAGE
+) -> str:
+    """Format message list for summarization; truncate long messages to stay within token limits."""
+    parts = []
+    for m in messages:
+        role = (m.get("role") or "user").capitalize()
+        content = (m.get("content") or "").strip()
+        if len(content) > max_per_message:
+            content = content[: max_per_message - 3].rstrip() + "..."
+        parts.append("%s: %s" % (role, content))
+    return "\n\n".join(parts)
+
+
+async def _summarize_and_store_older(
+    session_id: str,
+    older_messages: List[Dict[str, str]],
+) -> None:
+    """
+    Summarize the older portion of the conversation and store in SESSION_SUMMARIES.
+    If a summary already exists, ask the model to merge the new excerpt into it.
+    On failure (e.g. model unavailable), leaves existing summary unchanged.
+    """
+    if not older_messages or not session_id:
+        return
+    excerpt = _format_messages_for_summary(older_messages)
+    if not excerpt.strip():
+        return
+    prev = (SESSION_SUMMARIES.get(session_id) or "").strip()
+    if prev:
+        prompt = (
+            "Update this conversation summary with the following new excerpt. "
+            "Preserve important facts, decisions, user goals, and key context. "
+            "Output only the updated summary, no preamble.\n\n"
+            "Current summary:\n%s\n\nNew excerpt:\n%s"
+        ) % (prev[:1500] if len(prev) > 1500 else prev, excerpt)
+    else:
+        prompt = (
+            "Summarize this conversation excerpt. "
+            "Capture important facts, decisions, user goals, and key context. "
+            "Output only the summary, no preamble.\n\nExcerpt:\n%s"
+        ) % excerpt
+    try:
+        summary = await model_client.chat(SUMMARY_SYSTEM, [{"role": "user", "content": prompt}])
+        if summary and summary.strip():
+            text = summary.strip()
+            if len(text) > MAX_SUMMARY_CHARS:
+                text = text[: MAX_SUMMARY_CHARS - 3].rstrip() + "..."
+            SESSION_SUMMARIES[session_id] = text
+            print("[WhisperLeaf] Session summary updated for session %s (%s chars)" % (session_id[:8], len(text)))
+    except Exception as e:
+        print("[WhisperLeaf] Summarization failed (continuing without): %s" % e)
 
 
 def _sse_message(event: str, data: str) -> bytes:
@@ -407,10 +546,11 @@ async def _rewrite_memory_query(user_message: str) -> str:
         return (user_message or "").strip()
 
 
-async def _build_memory_context(query: str, limit: int = 5) -> str:
+async def _build_memory_context(query: str, limit: int = 5):
     """
     Build a RELEVANT MEMORY context block via the Tool Bus (memory.search).
     Formats tool result and records used_in_context for simple-memory entries.
+    Returns (block_string, snippets_list) for model context and UI visibility.
     """
     result = await tool_bus.execute(
         "memory.search",
@@ -418,7 +558,7 @@ async def _build_memory_context(query: str, limit: int = 5) -> str:
         context={},
     )
     if not result.ok or not result.data:
-        return ""
+        return ("", [])
     snippets = result.data.get("snippets") or []
     entries_for_audit = result.data.get("entries_for_audit") or []
     for e in entries_for_audit:
@@ -427,8 +567,45 @@ async def _build_memory_context(query: str, limit: int = 5) -> str:
         except Exception:
             pass
     if not snippets:
-        return ""
-    return "RELEVANT MEMORY:\n" + "\n".join("- " + s for s in snippets)
+        return ("", [])
+    block = "RELEVANT MEMORY:\n" + "\n".join("- " + s for s in snippets)
+    return (block, list(snippets))
+
+
+async def _build_docs_context(query: str, limit: int = 5):
+    """
+    Build RELEVANT DOCUMENTS context block via docs.search.
+    Returns (block_str, source_names, excerpts) for context, citation, and preview.
+    excerpts: list of {"name": title, "snippet": text} per chunk (for UI preview).
+    """
+    result = await tool_bus.execute(
+        "docs.search",
+        {"query": (query or "").strip(), "top_k": limit},
+        context={},
+    )
+    if not result.ok or not result.data:
+        return ("", [], [])
+    items = result.data if isinstance(result.data, list) else []
+    if not items:
+        return ("", [], [])
+    lines = []
+    seen = set()
+    source_names: List[str] = []
+    excerpts: List[Dict[str, str]] = []
+    for r in items:
+        title = (r.get("title") or r.get("path") or "Document").strip()
+        if title and title not in seen:
+            seen.add(title)
+            source_names.append(title)
+        snippet = (r.get("snippet") or r.get("content") or "").strip()
+        if snippet:
+            lines.append("%s: %s" % (title, snippet[:400] + ("..." if len(snippet) > 400 else "")))
+            # Store full snippet for preview (cap length for payload)
+            excerpts.append({"name": title, "snippet": snippet[:1200] + ("..." if len(snippet) > 1200 else "")})
+    if not lines:
+        return ("", [], [])
+    block = "RELEVANT DOCUMENTS:\n" + "\n".join("- " + line for line in lines)
+    return (block, source_names, excerpts)
 
 
 @app.post("/api/chat")
@@ -438,6 +615,17 @@ async def chat_endpoint(payload: ChatRequest):
     managed on the client. Supports "remember: ..." and "no memory: ...".
     """
     raw_message = (payload.message or "").strip()
+    print("[WhisperLeaf chat] POST /api/chat message_len=%s history_len=%s" % (len(raw_message), len(payload.history or [])))
+
+    # Reject empty messages so the client always gets a well-formed response
+    if not raw_message:
+        async def empty_message_stream():
+            yield _sse_message("error", "Please enter a message.")
+        return StreamingResponse(
+            empty_message_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
 
     # "remember: ..." always stores and returns short reply
     if raw_message.lower().startswith("remember:"):
@@ -447,13 +635,15 @@ async def chat_endpoint(payload: ChatRequest):
         reply = "I've remembered that."
         sid = getattr(payload, "session_id", None)
         if sid:
+            _evict_chat_session_if_needed(sid)
             session_list = [{"role": m.role, "content": m.content} for m in payload.history]
-            session_list.append({"role": "user", "content": raw_message})
             session_list.append({"role": "assistant", "content": reply})
             CHAT_SESSIONS[sid] = session_list
 
         async def remember_stream() -> Any:
             yield _sse_message("chunk", reply)
+            if text:
+                yield _sse_message("memory_saved", json.dumps({"text": text[:200] + ("..." if len(text) > 200 else "")}))
             yield _sse_message("done", "")
 
         return StreamingResponse(
@@ -471,61 +661,128 @@ async def chat_endpoint(payload: ChatRequest):
     message_for_model = raw_message[10:].strip() if no_memory else raw_message
 
     # Automatic memory: save likely-stable facts (deterministic heuristic)
+    saved_memory_notification = None
     if not no_memory and message_for_model and _should_auto_save_memory(message_for_model):
         clean = message_for_model.strip()
         if not _looks_sensitive(clean):
             save_memory(clean)
             snippet = clean[:80] + ("..." if len(clean) > 80 else "")
             print(f"Auto-saved memory: {snippet}")
+            saved_memory_notification = {"text": clean[:200] + ("..." if len(clean) > 200 else "")}
 
     # Build messages with semantic/keyword memory context when available
     messages = [{"role": m.role, "content": m.content} for m in payload.history]
-    memory_query = await _rewrite_memory_query(message_for_model)
-    if not (memory_query or "").strip():
-        memory_query = message_for_model
-    memory_block = await _build_memory_context(memory_query, limit=5)
+    memory_query = message_for_model
+    memory_block = ""
+    memory_snippets: List[str] = []
+    try:
+        memory_query = await _rewrite_memory_query(message_for_model)
+        if not (memory_query or "").strip():
+            memory_query = message_for_model
+        memory_block, memory_snippets = await _build_memory_context(memory_query, limit=5)
+    except Exception as e:
+        print("[WhisperLeaf chat] memory retrieval failed (continuing without): %s" % e)
+        memory_block = ""
+        memory_snippets = []
     used_memory = bool(memory_block)
-    if memory_block:
-        note = "Note: You may use the relevant memory context below to answer consistently.\n\n"
-        user_content = note + memory_block + "\n\nUser message:\n" + message_for_model
+    doc_block = ""
+    doc_sources: List[str] = []
+    doc_excerpts: List[Dict[str, str]] = []
+    try:
+        doc_block, doc_sources, doc_excerpts = await _build_docs_context(memory_query, limit=5)
+    except Exception as e:
+        print("[WhisperLeaf chat] docs context failed (continuing without): %s" % e)
+    if memory_block or doc_block:
+        note = "Note: You may use the context below to answer.\n\n"
+        parts = [note]
+        if memory_block:
+            parts.append(memory_block)
+        if doc_block:
+            parts.append(doc_block)
+        user_content = "\n\n".join(parts) + "\n\nUser message:\n" + message_for_model
     else:
         user_content = message_for_model
     messages.append({"role": "user", "content": user_content})
 
     session_id = getattr(payload, "session_id", None)
     if session_id:
+        _evict_chat_session_if_needed(session_id)
         session_list = [{"role": m.role, "content": m.content} for m in payload.history]
-        session_list.append({"role": "user", "content": raw_message})
-        CHAT_SESSIONS[session_id] = session_list
+        existing = CHAT_SESSIONS.get(session_id, [])
+        if len(session_list) >= len(existing):
+            CHAT_SESSIONS[session_id] = session_list
+
+    # When beyond context window: summarize older portion and store as session memory, then trim
+    if len(messages) > MAX_CONTEXT_MESSAGES:
+        older_count = len(messages) - MAX_CONTEXT_MESSAGES
+        if session_id and older_count > 0:
+            await _summarize_and_store_older(session_id, messages[:older_count])
+        messages = messages[-MAX_CONTEXT_MESSAGES:]
+
+    # Include conversation summary in system context when present (so model sees prior context)
+    session_summary = (SESSION_SUMMARIES.get(session_id, "") or "").strip() if session_id else ""
+    effective_system = (
+        (SYSTEM_PROMPT + "\n\n--- Conversation context so far ---\n" + session_summary)
+        if session_summary
+        else SYSTEM_PROMPT
+    )
 
     async def generate() -> Any:
         full_reply = ""
-        if used_memory:
-            # Optional status for UI: show "Searching memory: <query>" before chunks
-            status = json.dumps({
-                "step": "memory_search",
-                "query": (memory_query or "")[:40].strip(),
-            })
-            yield _sse_message("status", status)
-            meta = json.dumps({"used_memory": True, "memory_count": max(1, memory_block.count("- "))})
-            yield _sse_message("meta", meta)
         try:
-            async for chunk in model_client.chat_stream(SYSTEM_PROMPT, messages):
-                full_reply += chunk
-                yield _sse_message("chunk", chunk)
-            yield _sse_message("done", "")
-            if session_id and session_id in CHAT_SESSIONS:
-                CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
-        except httpx.ConnectError:
-            yield _sse_message(
-                "error",
-                "WhisperLeaf cannot reach the local model server. "
-                "Please start Ollama (or your local LLM server) and try again.",
-            )
-        except httpx.HTTPStatusError as e:
-            yield _sse_message("error", f"Local model error: {e!s}")
-        except Exception as e:
-            yield _sse_message("error", f"Unexpected error: {e!s}")
+            if saved_memory_notification:
+                yield _sse_message("memory_saved", json.dumps(saved_memory_notification))
+            if doc_sources:
+                yield _sse_message(
+                    "doc_sources",
+                    json.dumps({"sources": doc_sources, "excerpts": doc_excerpts}),
+                )
+            if used_memory:
+                status = json.dumps({
+                    "step": "memory_search",
+                    "query": (memory_query or "")[:40].strip(),
+                })
+                yield _sse_message("status", status)
+                meta = json.dumps({
+                    "used_memory": True,
+                    "memory_count": len(memory_snippets),
+                    "snippets": memory_snippets,
+                })
+                yield _sse_message("meta", meta)
+            try:
+                chunk_count = 0
+                async for chunk in model_client.chat_stream(effective_system, messages):
+                    full_reply += chunk
+                    chunk_count += 1
+                    if chunk_count == 1:
+                        print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
+                    yield _sse_message("chunk", chunk)
+                print("[WhisperLeaf chat] stream done chunks=%s reply_len=%s" % (chunk_count, len(full_reply)))
+                if full_reply:
+                    print("[WhisperLeaf debug] assembled backend reply (first 120 chars): %r" % full_reply[:120])
+                yield _sse_message("done", "")
+                if session_id and session_id in CHAT_SESSIONS:
+                    CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
+            except httpx.ConnectError:
+                print("[WhisperLeaf chat] model ConnectError (is Ollama running?)")
+                yield _sse_message(
+                    "error",
+                    "Cannot reach the local model. Please start Ollama (or your local LLM server) and try again.",
+                )
+            except httpx.HTTPStatusError as e:
+                print("[WhisperLeaf chat] model HTTPStatusError: %s" % e)
+                if e.response is not None and e.response.status_code == 404:
+                    yield _sse_message(
+                        "error",
+                        "Model not found. Install it in Ollama (e.g. ollama pull llama3.2) and try again.",
+                    )
+                else:
+                    yield _sse_message("error", "Local model error: %s" % (e,))
+            except Exception as e:
+                print("[WhisperLeaf chat] unexpected error: %s" % e)
+                yield _sse_message("error", "Something went wrong. Please try again.")
+        except (BrokenPipeError, ConnectionResetError) as e:
+            print("[WhisperLeaf] client disconnected or connection reset: %s" % e)
 
     return StreamingResponse(
         generate(),
@@ -550,9 +807,10 @@ class ChatClearBody(BaseModel):
 
 @app.post("/api/chat/clear")
 async def clear_chat_session(body: ChatClearBody):
-    """Clear persisted history for the given session."""
+    """Clear persisted history and session summary for the given session."""
     if body.session_id:
         CHAT_SESSIONS.pop(body.session_id, None)
+        SESSION_SUMMARIES.pop(body.session_id, None)
     return {"ok": True}
 
 
@@ -584,6 +842,20 @@ async def get_memory_audit(memory_id: int, limit: int = 50):
     return {"memory_id": memory_id, "events": events}
 
 
+@app.get("/api/memories")
+async def api_list_memories(limit: int = Query(200, ge=1, le=500)):
+    """List saved memories for the management UI (newest first)."""
+    return {"memories": list_memories(limit=limit)}
+
+
+@app.delete("/api/memory/{memory_id}")
+async def api_delete_memory(memory_id: int):
+    """Delete a saved memory by id."""
+    if not delete_memory(memory_id):
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"ok": True, "memory_id": memory_id}
+
+
 # -------------------------------------------------------------------
 # Tools Registry (plugin layer)
 # -------------------------------------------------------------------
@@ -610,6 +882,118 @@ async def api_call_tool(body: ToolCallBody):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------------------------------------------------------------------
+# Document ingestion (simple upload, chunk, embed, search)
+# -------------------------------------------------------------------
+
+def _load_documents_index() -> Dict[str, Any]:
+    """Load document index from disk. Returns dict doc_id -> {title, filename, chunks_count, uploaded_at}."""
+    if not DOCUMENTS_INDEX_PATH.exists():
+        return {}
+    try:
+        with open(DOCUMENTS_INDEX_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_documents_index(index: Dict[str, Any]) -> None:
+    """Persist document index to disk."""
+    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(DOCUMENTS_INDEX_PATH, "w", encoding="utf-8") as f:
+        json.dump(index, f, indent=2)
+
+
+@app.post("/api/documents/upload")
+async def upload_document_ingest(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+):
+    """Upload a document: store locally, extract text, chunk, and add to vector store."""
+    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    filename = file.filename or "document"
+    ext = Path(filename).suffix.lower()
+    if ext not in document_processor.get_supported_types():
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported type. Supported: %s" % ", ".join(document_processor.get_supported_types()),
+        )
+    doc_id = str(uuid.uuid4())
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._- ") or "doc"
+    stored_path = DOCUMENTS_DIR / f"{doc_id}_{safe_name}"
+    try:
+        content = await file.read()
+        stored_path.write_bytes(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to save file: %s" % e)
+    try:
+        processed = document_processor.process_document(str(stored_path))
+        if processed["processing_status"] != "success":
+            stored_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Processing failed: %s" % processed.get("processing_status", "error"))
+        chunks = processed.get("chunks") or []
+        if not chunks and processed.get("text", "").strip():
+            chunks = [processed["text"].strip()[:10000]]
+        title_str = (title or filename or doc_id).strip()
+        vector_store.add_chunks(
+            document_id=doc_id,
+            chunks=chunks,
+            metadata={"title": title_str, "filename": filename},
+        )
+        index = _load_documents_index()
+        index[doc_id] = {
+            "title": title_str,
+            "filename": filename,
+            "chunks_count": len(chunks),
+            "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        _save_documents_index(index)
+        return {
+            "id": doc_id,
+            "title": title_str,
+            "chunks_count": len(chunks),
+            "word_count": processed.get("word_count", 0),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        stored_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail="Ingestion failed: %s" % e)
+
+
+@app.get("/api/documents")
+async def list_ingested_documents():
+    """List ingested documents (from index)."""
+    index = _load_documents_index()
+    return {
+        "documents": [
+            {"id": doc_id, **meta}
+            for doc_id, meta in index.items()
+        ]
+    }
+
+
+@app.delete("/api/documents/{document_id}")
+async def delete_ingested_document(document_id: str):
+    """Remove document from index, vector store, and delete stored file."""
+    index = _load_documents_index()
+    if document_id not in index:
+        raise HTTPException(status_code=404, detail="Document not found")
+    meta = index[document_id]
+    vector_store.remove_document(document_id)
+    filename = meta.get("filename", "")
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._- ") or "doc"
+    stored_path = DOCUMENTS_DIR / f"{document_id}_{safe_name}"
+    if stored_path.exists():
+        try:
+            stored_path.unlink()
+        except Exception:
+            pass
+    del index[document_id]
+    _save_documents_index(index)
+    return {"ok": True, "id": document_id}
 
 
 # -------------------------------------------------------------------
