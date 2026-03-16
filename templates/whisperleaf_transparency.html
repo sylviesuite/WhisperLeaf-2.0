@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhisperLeaf Transparency</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, #0f1419 0%, #1a2332 40%, #0d1117 100%);
+      color: #e6edf3;
+    }
+
+    .app-header {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 18px 0 14px 0;
+    }
+
+    .app-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Circular ring via CSS; owl image transparent, centered */
+    .app-logo .owl-icon-wrap {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      line-height: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      cursor: pointer;
+      background: #111;
+      border: 3px solid rgba(255, 255, 255, 0.18);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .app-logo .owl-icon-wrap:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 18px rgba(120, 255, 200, 0.25);
+    }
+
+    .app-logo .owl-icon {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .app-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e6edf3;
+      letter-spacing: 0.02em;
+    }
+
+    .app-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      grid-template-rows: 1fr;
+      flex: 1;
+      min-height: 0;
+      transition: grid-template-columns 0.2s ease;
+    }
+
+    .app-sidebar {
+      background: rgba(17, 24, 39, 0.78);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0.75rem 0.5rem;
+      overflow: hidden;
+    }
+
+    .sidebar-nav {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    .sidebar-nav a {
+      display: block;
+      padding: 0.5rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: #8b949e;
+      text-decoration: none;
+      transition: background-color 0.14s ease, color 0.14s ease;
+    }
+
+    .sidebar-nav a:hover {
+      background: rgba(48, 54, 61, 0.4);
+      color: #e6edf3;
+    }
+
+    .sidebar-nav a.current {
+      color: #58a6ff;
+      font-weight: 500;
+    }
+
+    .app-main {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 1rem;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .main-card {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      flex: 1;
+      min-height: 0;
+      background: rgba(17, 24, 39, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      flex-shrink: 0;
+      padding: 8px 1.25rem 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-weight: 600;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+    }
+
+    .transparency-content {
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .transparency-section {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+
+    .transparency-section h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+
+    .transparency-section p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .transparency-section a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .transparency-section a:hover {
+      text-decoration: underline;
+    }
+
+    .transparency-placeholder-chart {
+      min-height: 180px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6e7681;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-logo">
+      <a href="/" class="owl-icon-wrap" aria-label="WhisperLeaf home">
+        <img src="/static/owl.png" alt="WhisperLeaf" class="owl-icon" />
+      </a>
+      <div class="app-title">WhisperLeaf</div>
+    </div>
+  </header>
+  <div class="app-layout">
+    <aside class="app-sidebar">
+      <nav class="sidebar-nav" aria-label="App navigation">
+        <a href="/chat">Chat</a>
+        <a href="/transparency" class="current">Transparency</a>
+      </nav>
+    </aside>
+    <main class="app-main">
+      <div class="main-card">
+        <div class="card-header">WhisperLeaf Transparency</div>
+        <div class="transparency-content">
+          <section class="transparency-section" aria-labelledby="sec-energy">
+            <h2 id="sec-energy">Energy Benchmark</h2>
+            <div class="transparency-placeholder-chart" aria-hidden="true">
+              Placeholder chart area
+            </div>
+          </section>
+          <section class="transparency-section" aria-labelledby="sec-privacy">
+            <h2 id="sec-privacy">Privacy Architecture</h2>
+            <p>All documents remain on your device.</p>
+          </section>
+          <section class="transparency-section" aria-labelledby="sec-methodology">
+            <h2 id="sec-methodology">Benchmark Methodology</h2>
+            <p>
+              <a href="/benchmarks/whisperleaf_energy_methodology.md">Energy benchmark methodology (whisperleaf_energy_methodology.md)</a>
+            </p>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

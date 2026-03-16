@@ -45,7 +45,10 @@
       align-items: center;
     }
 
+    /* Circular ring via CSS; owl image transparent, centered */
     .app-logo .owl-icon-wrap {
+      width: 56px;
+      height: 56px;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -53,7 +56,8 @@
       border-radius: 50%;
       overflow: hidden;
       cursor: pointer;
-      background: transparent;
+      background: #111;
+      border: 3px solid rgba(255, 255, 255, 0.18);
       transition: transform 0.18s ease, box-shadow 0.18s ease;
     }
 
@@ -63,11 +67,10 @@
     }
 
     .app-logo .owl-icon {
-      width: 48px;
-      height: 48px;
-      object-fit: cover;
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
       display: block;
-      border-radius: 50%;
     }
 
     .app-title {
@@ -232,14 +235,28 @@
       align-items: center;
     }
 
+    .app-sidebar .owl-icon-wrap {
+      width: 56px;
+      height: 56px;
+      background: #111;
+      border: 3px solid rgba(255, 255, 255, 0.18);
+    }
+
     .app-sidebar .owl-icon {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+    }
+
+    .app-layout.sidebar-collapsed .app-sidebar .owl-icon-wrap {
+      width: 44px;
+      height: 44px;
+      border-width: 2px;
     }
 
     .app-layout.sidebar-collapsed .app-sidebar .owl-icon {
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
     }
 
     .sidebar-title {
@@ -301,20 +318,24 @@
     }
 
     .chat-owl .owl-icon-wrap {
-      display: inline-block;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       line-height: 0;
       border-radius: 50%;
       overflow: hidden;
-      background: transparent;
+      background: #111;
+      border: 3px solid rgba(255, 255, 255, 0.18);
       cursor: pointer;
     }
 
     .chat-owl .owl-icon {
-      width: 56px;
-      height: 56px;
-      object-fit: cover;
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
       display: block;
-      border-radius: 50%;
     }
 
     .chat-owl .owl-icon-wrap.owl-thinking,

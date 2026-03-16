@@ -94,6 +94,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Benchmarks dir – methodology and benchmark docs (e.g. /benchmarks/whisperleaf_energy_methodology.md)
+BENCHMARKS_DIR = PROJECT_ROOT / "benchmarks"
+if BENCHMARKS_DIR.exists():
+    app.mount("/benchmarks", StaticFiles(directory=str(BENCHMARKS_DIR)), name="benchmarks")
+
 # Templates – HTML pages
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -252,6 +257,15 @@ async def chat_page(request: Request):
     return templates.TemplateResponse(
         "whisperleaf_chat.html",
         {"request": request, "app_name": "WhisperLeaf"},
+    )
+
+
+@app.get("/transparency", response_class=HTMLResponse)
+async def transparency_page(request: Request):
+    """Transparency page: energy benchmark, privacy, methodology."""
+    return templates.TemplateResponse(
+        "whisperleaf_transparency.html",
+        {"request": request},
     )
 
 # -------------------------------------------------------------------

@@ -37,9 +37,23 @@ body {
   filter: drop-shadow(0 0 25px rgba(120,180,255,0.45));
 }
 
-.owl-icon {
+/* Circular container: ring and fill via CSS; owl image transparent, centered */
+.logo-circle {
   width: 120px;
   height: 120px;
+  border-radius: 50%;
+  background: #111;
+  border: 6px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px rgba(0, 255, 200, 0.15);
+}
+
+.logo-circle .owl-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
   display: block;
 }
 
@@ -80,7 +94,9 @@ p {
 <body>
 
 <div class="landing-owl" id="landingOwl" role="button" aria-label="Start WhisperLeaf session">
-  <img src="/static/owl.png" alt="WhisperLeaf owl" class="owl-icon">
+  <div class="logo-circle">
+    <img src="/static/owl.png" alt="WhisperLeaf owl" class="owl-icon">
+  </div>
 </div>
 
 <h1>WhisperLeaf</h1>
