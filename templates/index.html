@@ -37,24 +37,28 @@ body {
   filter: drop-shadow(0 0 25px rgba(120,180,255,0.45));
 }
 
-/* Circular container: ring and fill via CSS; owl image transparent, centered */
+/* Outer ring: CSS-only, crisp circle; owl artwork unchanged inside */
 .logo-circle {
   width: 120px;
   height: 120px;
   border-radius: 50%;
   background: #111;
-  border: 6px solid rgba(255, 255, 255, 0.18);
+  border: 6px solid #fff;
+  box-sizing: border-box;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 30px rgba(0, 255, 200, 0.15);
 }
 
-.logo-circle .owl-icon {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
+/* Overscale so dark badge in PNG reaches circle edge; container crops excess */
+.logo-circle img {
+  width: 135%;
+  height: 135%;
+  object-fit: cover;
+  object-position: center;
   display: block;
+  flex-shrink: 0;
 }
 
 @keyframes owlPulse {
@@ -88,6 +92,23 @@ p {
   font-size: 0.95rem;
 }
 
+.landing-nav {
+  margin-top: 1.25rem;
+}
+
+.landing-nav a {
+  color: #8b949e;
+  text-decoration: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.landing-nav a:hover {
+  color: #e6edf3;
+  text-decoration: underline;
+}
+
 </style>
 </head>
 
@@ -101,6 +122,9 @@ p {
 
 <h1>WhisperLeaf</h1>
 <p>Privacy-first local AI assistant</p>
+<nav class="landing-nav" aria-label="WhisperLeaf navigation">
+  <a href="/transparency">Transparency</a>
+</nav>
 
 <script>
 

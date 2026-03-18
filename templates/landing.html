@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhisperLeaf – Your AI. Your Device. Your Data.</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(88, 166, 255, 0.18), transparent 55%),
+        radial-gradient(circle at bottom, rgba(35, 134, 54, 0.16), transparent 55%),
+        linear-gradient(160deg, #0f1419 0%, #1a2332 40%, #0d1117 100%);
+      color: #e6edf3;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page-shell {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 1.25rem 3rem;
+    }
+
+    /* Top navigation */
+    .wl-header {
+      width: 100%;
+      padding: 18px 30px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .wl-header-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .wl-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #e6edf3;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .wl-brand span {
+      letter-spacing: 0.04em;
+    }
+
+    .wl-nav a {
+      margin-left: 18px;
+      text-decoration: none;
+      color: #8b949e;
+      font-size: 0.9rem;
+      transition: color 0.18s ease;
+    }
+
+    .wl-nav a:hover {
+      color: #e6edf3;
+    }
+
+    /* Logo circle (reuse shape from app) */
+    .logo-circle {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #111;
+      border: 6px solid #fff;
+      box-sizing: border-box;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-circle img {
+      width: 135%;
+      height: 135%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+
+    .logo-circle.small {
+      width: 32px;
+      height: 32px;
+      border-width: 2px;
+    }
+
+    /* Hero layout */
+    .hero {
+      max-width: 900px;
+      width: 100%;
+      margin: 36px auto 40px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 40px;
+      align-items: center;
+    }
+
+    .hero-left {
+      max-width: 520px;
+    }
+
+    .hero-kicker {
+      font-size: 0.8rem;
+      color: #6e7681;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin: 0 0 0.5rem 0;
+    }
+
+    .hero-title {
+      font-size: clamp(2rem, 4vw, 2.6rem);
+      line-height: 1.15;
+      margin: 0 0 0.75rem 0;
+    }
+
+    .hero-subtitle {
+      font-size: 0.98rem;
+      color: #8b949e;
+      margin: 0 0 1.5rem 0;
+      max-width: 480px;
+    }
+
+    .hero-ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .btn {
+      border-radius: 999px;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.4rem;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+      transition:
+        background-color 0.16s ease,
+        border-color 0.16s ease,
+        color 0.16s ease,
+        transform 0.1s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #238636, #2ea043);
+      border-color: rgba(46, 160, 67, 0.9);
+      color: #f0f6fc;
+      box-shadow: 0 8px 24px rgba(46, 160, 67, 0.35);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2ea043, #3fb950);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: rgba(140, 149, 159, 0.5);
+      color: #c9d1d9;
+    }
+
+    .btn-ghost:hover {
+      border-color: rgba(201, 209, 217, 0.8);
+      background: rgba(110, 118, 129, 0.18);
+    }
+
+    .hero-note {
+      font-size: 0.8rem;
+      color: #6e7681;
+      margin: 0.35rem 0 0;
+    }
+
+    .hero-right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .hero-orbit {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-glow {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(88, 166, 255, 0.35), transparent 65%);
+      filter: blur(10px);
+      opacity: 0.9;
+    }
+
+    .hero-panel {
+      width: 100%;
+      max-width: 360px;
+      border-radius: 14px;
+      background: rgba(13, 17, 23, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+      overflow: hidden;
+    }
+
+    .hero-panel-header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #8b949e;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .hero-panel-title {
+      font-weight: 500;
+      color: #e6edf3;
+    }
+
+    .hero-panel-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(63, 185, 80, 0.7);
+      color: #3fb950;
+      font-size: 0.7rem;
+    }
+
+    .hero-panel-body {
+      padding: 12px 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hero-bubble {
+      border-radius: 12px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .hero-bubble.user {
+      align-self: flex-end;
+      background: rgba(35, 134, 54, 0.2);
+      border: 1px solid rgba(63, 185, 80, 0.5);
+    }
+
+    .hero-bubble.assistant {
+      align-self: flex-start;
+      background: rgba(22, 27, 34, 0.9);
+      border: 1px solid rgba(110, 118, 129, 0.5);
+    }
+
+    .hero-panel-input {
+      padding: 10px 14px 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .hero-input-pill {
+      border-radius: 999px;
+      background: rgba(13, 17, 23, 0.9);
+      border: 1px solid rgba(110, 118, 129, 0.6);
+      padding: 6px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #6e7681;
+    }
+
+    .hero-input-send {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+
+    /* Trust strip */
+    .trust-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .trust-item {
+      font-size: 0.78rem;
+      color: #8b949e;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(13, 17, 23, 0.8);
+    }
+
+    /* Generic sections */
+    .section {
+      max-width: 900px;
+      width: 100%;
+      margin: 48px auto 0;
+    }
+
+    .section h2 {
+      font-size: 1.3rem;
+      margin: 0 0 0.75rem 0;
+    }
+
+    .section-lead {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.95rem;
+      color: #8b949e;
+      max-width: 640px;
+    }
+
+    .section-body {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #8b949e;
+      max-width: 640px;
+    }
+
+    /* How it works */
+    .how-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .how-card {
+      background: rgba(17, 24, 39, 0.75);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 1.1rem 1.2rem;
+    }
+
+    .how-card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
+    }
+
+    .how-card p {
+      margin: 0;
+      font-size: 0.86rem;
+      color: #8b949e;
+    }
+
+    /* Transparency section */
+    .transparency-list {
+      list-style: disc;
+      margin: 0.75rem 0 0 1.2rem;
+      padding: 0;
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+
+    .link-cta {
+      display: inline-block;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .link-cta:hover {
+      text-decoration: underline;
+    }
+
+    /* Comparison */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+    }
+
+    .compare-column {
+      background: rgba(17, 24, 39, 0.75);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 1.1rem 1.2rem;
+    }
+
+    .compare-column--highlight {
+      border-color: rgba(63, 185, 80, 0.6);
+    }
+
+    .compare-column h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
+    }
+
+    .compare-column ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      list-style: disc;
+      color: #8b949e;
+      font-size: 0.9rem;
+    }
+
+    /* Final CTA */
+    .final-cta {
+      text-align: center;
+    }
+
+    .final-cta-actions {
+      margin-top: 1.1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    @keyframes owl-cta-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    .final-cta-owl {
+      margin-top: 2.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      text-decoration: none;
+    }
+
+    .final-cta-owl-button {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.85);
+      box-sizing: border-box;
+      overflow: hidden;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.2);
+      cursor: pointer;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      animation: owl-cta-pulse 3s ease-in-out infinite;
+    }
+
+    .final-cta-owl:hover .final-cta-owl-button {
+      animation: none;
+      transform: scale(1.05);
+      box-shadow: 0 0 40px rgba(88, 166, 255, 0.35);
+      border-color: #ffffff;
+    }
+
+    .final-cta-owl-button.owl-cta-clicked {
+      transform: scale(0.97);
+      transition-duration: 0.12s;
+    }
+
+    .final-cta-owl-button img {
+      width: 135%;
+      height: 135%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+
+    .final-cta-owl-label {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .final-cta-owl-button {
+        animation: none;
+      }
+    }
+
+    .btn-link-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 0.6rem 1.4rem;
+      border: 1px solid rgba(140, 149, 159, 0.4);
+      color: #c9d1d9;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .btn-link-ghost:hover {
+      border-color: rgba(201, 209, 217, 0.8);
+      background: rgba(110, 118, 129, 0.18);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .wl-header {
+        padding-inline: 16px;
+      }
+
+      .wl-header-inner {
+        gap: 8px;
+      }
+
+      .wl-nav {
+        display: none;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 28px;
+        margin-top: 28px;
+      }
+
+      .hero-right {
+        order: -1;
+      }
+
+      .section {
+        margin-top: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="wl-header">
+    <div class="wl-header-inner">
+      <a href="/" class="wl-brand">
+        <div class="logo-circle small">
+          <img src="/static/owl.png" alt="WhisperLeaf owl" />
+        </div>
+        <span>WhisperLeaf</span>
+      </a>
+      <nav class="wl-nav">
+        <a href="/transparency">Transparency</a>
+        <a href="/app">Enter App</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="page-shell">
+    <!-- HERO -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-left">
+        <p class="hero-kicker">Private local AI workspace</p>
+        <h1 id="hero-title" class="hero-title">Your AI. Your Device. Your Data.</h1>
+        <p class="hero-subtitle">
+          Runs entirely on your computer. No cloud. No tracking. No compromises.
+        </p>
+        <div class="hero-ctas">
+          <a href="/app" class="btn btn-primary">Enter App</a>
+          <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
+        </div>
+        <p class="hero-note">Works even when you’re offline.</p>
+
+        <div class="trust-strip" aria-label="WhisperLeaf trust points">
+          <div class="trust-item">Fully local</div>
+          <div class="trust-item">No account required</div>
+          <div class="trust-item">No tracking</div>
+          <div class="trust-item">Private by default</div>
+        </div>
+      </div>
+
+      <div class="hero-right" aria-hidden="true">
+        <div class="hero-orbit">
+          <div class="hero-glow"></div>
+          <div class="logo-circle">
+            <img src="/static/owl.png" alt="" />
+          </div>
+        </div>
+        <div class="hero-panel">
+          <div class="hero-panel-header">
+            <span class="hero-panel-title">WhisperLeaf Chat</span>
+            <span class="hero-panel-badge">Local · Offline</span>
+          </div>
+          <div class="hero-panel-body">
+            <div class="hero-bubble user">
+              Help me think through this idea without sending anything to the cloud.
+            </div>
+            <div class="hero-bubble assistant">
+              I’ll work with it locally and help you structure your thoughts step by step.
+            </div>
+          </div>
+          <div class="hero-panel-input">
+            <div class="hero-input-pill">
+              <span>Ask WhisperLeaf anything…</span>
+              <span class="hero-input-send">↵</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHY -->
+    <section class="section" aria-labelledby="why-title">
+      <h2 id="why-title">Why WhisperLeaf</h2>
+      <p class="section-lead">
+        Most AI tools live far away on remote servers. Your documents, notes, and ideas have to travel just to get help.
+      </p>
+      <p class="section-body">
+        WhisperLeaf runs on your own device. It reads and reasons locally, so your work stays where it belongs—with you.
+      </p>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how-it-works" class="section" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <div class="how-grid">
+        <article class="how-card">
+          <h3>Download</h3>
+          <p>Install WhisperLeaf on your computer. No account or signup flow required.</p>
+        </article>
+        <article class="how-card">
+          <h3>Setup</h3>
+          <p>Choose a local model, point WhisperLeaf at your documents, and confirm your preferences.</p>
+        </article>
+        <article class="how-card">
+          <h3>Use</h3>
+          <p>Chat, summarize, and explore ideas in a calm workspace that never sends your writing away.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- TRANSPARENCY -->
+    <section class="section" aria-labelledby="transparency-title">
+      <h2 id="transparency-title">See what your AI is doing</h2>
+      <p class="section-lead">
+        WhisperLeaf makes local processing visible. You can see when it’s working, which documents it’s using, and what stays on-device.
+      </p>
+      <ul class="transparency-list">
+        <li>Understand when and how WhisperLeaf is using your content.</li>
+        <li>Verify that no ordinary workflows send data to remote servers.</li>
+        <li>Review benchmarks that come from your own machine.</li>
+      </ul>
+      <a href="/transparency" class="link-cta">View Transparency</a>
+    </section>
+
+    <!-- COMPARISON -->
+    <section class="section" aria-labelledby="compare-title">
+      <h2 id="compare-title">Cloud AI vs WhisperLeaf</h2>
+      <div class="compare-grid">
+        <div class="compare-column">
+          <h3>Cloud AI</h3>
+          <ul>
+            <li>Runs on remote servers</li>
+            <li>Requires login and account</li>
+            <li>Data may be stored or logged</li>
+            <li>Often tied to subscriptions</li>
+          </ul>
+        </div>
+        <div class="compare-column compare-column--highlight">
+          <h3>WhisperLeaf</h3>
+          <ul>
+            <li>Runs on your own device</li>
+            <li>No account needed</li>
+            <li>Your documents stay local</li>
+            <li>Designed for local ownership</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="section final-cta" aria-labelledby="final-title">
+      <h2 id="final-title">Take back control of your AI.</h2>
+      <p class="section-lead">
+        Keep your ideas, documents, and research where they belong—on your own machine.
+      </p>
+      <div class="final-cta-actions">
+        <a href="/app" class="btn btn-primary">Enter App</a>
+        <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
+      </div>
+      <a href="/app" class="final-cta-owl" id="finalCtaOwl" aria-label="Enter WhisperLeaf app">
+        <div class="final-cta-owl-button">
+          <img src="/static/owl.png" alt="WhisperLeaf owl" />
+        </div>
+        <div class="final-cta-owl-label">Enter WhisperLeaf</div>
+      </a>
+    </section>
+  </div>
+  <script>
+    (function () {
+      var el = document.getElementById('finalCtaOwl');
+      if (!el) return;
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        var btn = el.querySelector('.final-cta-owl-button');
+        if (btn) btn.classList.add('owl-cta-clicked');
+        setTimeout(function () { window.location.href = '/app'; }, 120);
+      });
+    })();
+  </script>
+</body>
+</html>
+

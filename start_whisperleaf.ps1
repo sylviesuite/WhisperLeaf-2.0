@@ -23,4 +23,4 @@ $openBrowser = {
 }
 Start-Job -ScriptBlock $openBrowser | Out-Null
 
-python -m uvicorn src.core.main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn src.core.main:app --reload --port 8000

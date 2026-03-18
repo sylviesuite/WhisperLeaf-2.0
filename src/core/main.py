@@ -245,15 +245,23 @@ async def api_model_status():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request):
-    """Landing page: templates/index.html."""
+async def landing(request: Request):
+    """Marketing landing page."""
+    return templates.TemplateResponse("landing.html", {"request": request})
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_splash(request: Request):
+    """Minimal owl splash entry page."""
+    # Existing minimal owl splash template
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/chat", response_class=HTMLResponse)
 @app.get("/chat-ui", response_class=HTMLResponse)
-async def chat_page(request: Request):
-    """Chat UI: templates/whisperleaf_chat.html."""
+async def chat(request: Request):
+    """Main chat UI."""
+    # Use the real chat template filename
     return templates.TemplateResponse(
         "whisperleaf_chat.html",
         {"request": request, "app_name": "WhisperLeaf"},
@@ -261,8 +269,9 @@ async def chat_page(request: Request):
 
 
 @app.get("/transparency", response_class=HTMLResponse)
-async def transparency_page(request: Request):
-    """Transparency page: energy benchmark, privacy, methodology."""
+async def transparency(request: Request):
+    """Transparency and benchmark page."""
+    # Use the real transparency template filename
     return templates.TemplateResponse(
         "whisperleaf_transparency.html",
         {"request": request},

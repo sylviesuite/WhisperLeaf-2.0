@@ -49,6 +49,9 @@ pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
 httpx>=0.25.0
 
+# Scripts: image processing (e.g. isolate_owl_from_badge.py)
+Pillow>=10.0.0
+
 # Development Tools
 black>=23.9.0
 flake8>=6.1.0

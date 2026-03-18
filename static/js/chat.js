@@ -43,6 +43,7 @@ const ChatController = {
     this.els.newSessionBtn = document.getElementById('newSessionBtn');
     this.els.clearBtn = document.getElementById('clearBtn');
     this.els.chatForm = document.getElementById('chatForm');
+    this.els.inputDropFeedback = document.getElementById('inputDropFeedback');
     this.els.jumpBottomBtn = document.getElementById('jumpBottomBtn');
     this.els.chatOwl = document.getElementById('chatOwl');
     this.els.owl = document.querySelector('.owl-icon-wrap');
@@ -50,6 +51,7 @@ const ChatController = {
     this.els.thinkingStep = document.getElementById('thinkingStep');
     this.els.chatHints = document.getElementById('chatHints');
     this.els.modelUnavailableBanner = document.getElementById('modelUnavailableBanner');
+    this.els.modelRetryBtn = document.getElementById('modelRetryBtn');
     this.els.mindMemoryBtn = document.getElementById('mindMemoryBtn');
     this.els.mindMemoryLabel = document.getElementById('mindMemoryLabel');
     this.els.memoryVisibilityPanel = document.getElementById('memoryVisibilityPanel');
@@ -81,28 +83,50 @@ const ChatController = {
     sessionStorage.setItem('whisperleaf_session_id', this.state.sessionId);
     const collapsed = sessionStorage.getItem('wlSidebarCollapsed') === 'true';
     this.setSidebarCollapsed(collapsed);
+    this.state.modelStatus = 'unknown';
   },
 
   async loadModelStatus() {
+    this.state.modelStatus = 'checking';
+    this.updateModelStatusUI();
     try {
       const res = await fetch('/api/model/status');
       if (!res.ok) return;
       const data = await res.json();
       this.state.modelAvailable = data.model_available === true;
+      this.state.modelStatus = this.state.modelAvailable ? 'ready' : 'unavailable';
       this.updateModelStatusUI();
     } catch (_) {
       this.state.modelAvailable = false;
+      this.state.modelStatus = 'unavailable';
       this.updateModelStatusUI();
     }
   },
 
   updateModelStatusUI() {
     const banner = this.els.modelUnavailableBanner;
+    const statusIndicator = document.getElementById('modelStatusIndicator');
     const onboardingReady = this.els.onboardingModelReady;
     const onboardingNotice = this.els.onboardingModelNotice;
     if (banner) {
       if (this.state.modelAvailable) banner.classList.add('hidden');
       else banner.classList.remove('hidden');
+    }
+    if (statusIndicator) {
+      const dot = statusIndicator.querySelector('.model-status-dot');
+      const label = statusIndicator.querySelector('.model-status-label');
+      statusIndicator.classList.remove('unavailable', 'checking', 'ready');
+      const s = this.state.modelStatus;
+      if (s === 'checking') {
+        statusIndicator.classList.add('checking');
+        if (label) label.textContent = 'Checking...';
+      } else if (s === 'ready') {
+        statusIndicator.classList.add('ready');
+        if (label) label.textContent = 'Model ready';
+      } else {
+        statusIndicator.classList.add('unavailable');
+        if (label) label.textContent = 'Not connected';
+      }
     }
     if (onboardingReady) {
       if (this.state.modelAvailable) onboardingReady.classList.remove('hidden');
@@ -342,6 +366,57 @@ const ChatController = {
     }
   },
 
+  setInputDropFeedback(text, clearAfterMs = 0) {
+    const el = this.els.inputDropFeedback;
+    if (!el) return;
+    if (this._inputDropFeedbackTimer) {
+      clearTimeout(this._inputDropFeedbackTimer);
+      this._inputDropFeedbackTimer = null;
+    }
+    el.textContent = text || '';
+    if (text) {
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+    if (clearAfterMs > 0) {
+      this._inputDropFeedbackTimer = setTimeout(() => {
+        el.classList.add('hidden');
+        el.textContent = '';
+        this._inputDropFeedbackTimer = null;
+      }, clearAfterMs);
+    }
+  },
+
+  async uploadDroppedFile(file) {
+    if (!file) return;
+    this.setInputDropFeedback('File added: ' + (file.name || 'document'), 0);
+    this.setInputDropFeedback('Uploading…', 0);
+    let processingTimer = setTimeout(() => {
+      this.setInputDropFeedback('Processing document…', 0);
+      processingTimer = null;
+    }, 2000);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', file.name || '');
+    try {
+      const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
+      if (processingTimer) clearTimeout(processingTimer);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = err.detail || res.statusText || 'Unknown error';
+        const msg = typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail));
+        this.setInputDropFeedback('Upload failed: ' + msg, 5000);
+        return;
+      }
+      this.setInputDropFeedback('Document indexed successfully.', 4000);
+      await this.loadDocuments();
+    } catch (err) {
+      if (processingTimer) clearTimeout(processingTimer);
+      this.setInputDropFeedback('Upload failed: ' + (err && err.message ? err.message : 'Network error'), 5000);
+    }
+  },
+
   showMemorySavedNotification(payload) {
     const el = this.els.memorySavedNotification;
     const preview = this.els.memorySavedPreview;
@@ -410,7 +485,7 @@ const ChatController = {
   },
 
   bindEvents() {
-    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle } = this.els;
+    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle, modelRetryBtn } = this.els;
 
     if (sidebarToggle && appLayout) {
       sidebarToggle.addEventListener('click', () => {
@@ -423,10 +498,33 @@ const ChatController = {
       chatOwl.addEventListener('click', () => { window.location.href = '/'; });
     }
 
+    if (modelRetryBtn) {
+      modelRetryBtn.addEventListener('click', () => {
+        this.loadModelStatus();
+      });
+    }
+
     if (chatForm) {
       chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         this.sendMessage();
+      });
+      chatForm.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatForm.classList.add('drag-over');
+      });
+      chatForm.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget && chatForm.contains(e.relatedTarget)) return;
+        chatForm.classList.remove('drag-over');
+      });
+      chatForm.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatForm.classList.remove('drag-over');
+        const files = e.dataTransfer && e.dataTransfer.files;
+        const file = files && files.length > 0 ? files[0] : null;
+        if (file) this.uploadDroppedFile(file);
       });
     }
 
