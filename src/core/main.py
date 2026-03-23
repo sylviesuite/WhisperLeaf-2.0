@@ -45,6 +45,21 @@ from .memory_models import (
 )
 from .chat_engine import generate_reply
 from .local_model import LocalModelClient
+from .memory_injection_guard import (
+    filter_relevant_memories,
+    build_memory_context_block,
+    detect_topic_reset,
+)
+from .mode_router import (
+    ResponseMode,
+    anti_engineering_scaffolding_instruction,
+    conversational_posture,
+    detect_mode,
+    explain_mode_choice,
+    engineering_scaffolding_allowed,
+    parse_mode_override,
+)
+from .insight_box import build_mode_guidance
 from .memory import (
     init_memory_db,
     save_memory,
@@ -81,6 +96,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Developer Mode (global): when True, internal codebase details may be discussed without an explicit user ask.
+DEVELOPER_MODE: bool = False
+
 # Backend uptime for system.status
 _APP_START_TIME = time.time()
 
@@ -114,8 +132,191 @@ except FileNotFoundError:
         "Help the user think clearly, explore ideas, solve problems, and reason carefully. "
         "Prioritize clarity, independence, privacy, and thoughtful discussion. "
         "Avoid corporate tone, unnecessary apologies, and mentioning training data or large tech companies. "
-        "Speak plainly and help the user think through ideas."
+        "Speak plainly and help the user think through ideas. "
+        "Never expose internal file paths, modules, or implementation details unless the user explicitly "
+        "asks about WhisperLeaf's codebase or system design."
     )
+
+
+def is_explicit_codebase_query(message: str) -> bool:
+    """
+    True when the user intentionally asks about WhisperLeaf's codebase or system design.
+    Used to allow internal paths, modules, and architecture in the response.
+    """
+    triggers = [
+        "whisperleaf codebase",
+        "this project",
+        "your system",
+        "how is whisperleaf built",
+        "how does whisperleaf work",
+        "show me your code",
+        "in your code",
+        "your architecture",
+        "your implementation",
+    ]
+    msg = (message or "").lower()
+    if any(trigger in msg for trigger in triggers):
+        return True
+    # User names concrete repo paths or internal modules → developer intent.
+    developer_signals = (
+        "src/core",
+        "memory_search_tool",
+        "memory_injection_guard",
+        "injection_guard",
+        "test_memory_bleed",
+    )
+    if any(sig in msg for sig in developer_signals):
+        return True
+    # Broader WhisperLeaf implementation questions (not generic chat mentioning the name).
+    if "whisperleaf" in msg and any(
+        x in msg
+        for x in (
+            "codebase",
+            "implementation",
+            "source code",
+            "repository",
+            "repo layout",
+            "how is",
+            "where is",
+            "which file",
+            "your code",
+            "this app",
+        )
+    ):
+        return True
+    if "whisperleaf" in msg and any(
+        phrase in msg
+        for phrase in (
+            "how does whisperleaf",
+            "how is whisperleaf",
+            "whisperleaf architecture",
+            "whisperleaf implemented",
+            "whisperleaf's code",
+        )
+    ):
+        return True
+    return False
+
+
+def allows_internal_codebase_context(message: str) -> bool:
+    """
+    True when WhisperLeaf may reference internal paths, modules, and architecture in replies.
+    Either Developer Mode is on, or the user explicitly asked about the codebase.
+    """
+    return DEVELOPER_MODE or is_explicit_codebase_query(message)
+
+
+def response_contains_internal_leak(text: str) -> bool:
+    """
+    Heuristic: assistant text likely exposes internal repo details.
+    Used when the user did NOT ask an explicit codebase question — triggers rewrite/sanitize.
+    """
+    if not (text or "").strip():
+        return False
+    low = (text or "").lower()
+    if any(
+        p in low
+        for p in (
+            "src/core",
+            "memory_search_tool",
+            "injection_guard",
+            "memory_injection_guard",
+            "system prompt",
+        )
+    ):
+        return True
+    # Path-like references to this repo (avoid flagging every generic `foo.py` in code blocks).
+    if re.search(r"(?:^|\s)(?:src|tests)[/\\][^\s\n`]+\.py", low):
+        return True
+    if re.search(r"src[/\\]core[/\\]", low):
+        return True
+    # Internal tool / wiring names
+    if any(t in low for t in ("tools_registry", "register_tool", "capture_thought")):
+        return True
+    return False
+
+
+SANITIZE_INTERNAL_REPLY_SYSTEM = (
+    "You rewrite assistant replies for a user-facing privacy boundary. "
+    "Remove internal repository paths (e.g. src/core, tests/...), specific .py file paths, "
+    "WhisperLeaf-internal module names (memory_search_tool, memory_injection_guard), "
+    "mentions of system prompts, internal tool or registry names. "
+    "Keep the same helpful intent using generic language and portable examples. "
+    "If the text is already free of such internals, return it unchanged. "
+    "Output only the rewritten answer, with no preamble or meta-commentary."
+)
+
+
+async def rewrite_reply_without_internals(model_client: LocalModelClient, reply: str) -> str:
+    """LLM fallback: genericize a reply that leaked internal details."""
+    r = (reply or "").strip()
+    if not r:
+        return reply
+    try:
+        out = await model_client.chat(
+            SANITIZE_INTERNAL_REPLY_SYSTEM,
+            [{"role": "user", "content": "Rewrite the following assistant reply:\n\n" + r}],
+        )
+        return (out or r).strip()
+    except Exception:
+        return r
+
+
+def is_general_capability_meta_query(user_message: str) -> bool:
+    """
+    Capability / identity questions (e.g. 'can you write code?') that should use a normal
+    assistant posture — not execution artifacts or internal repo paths.
+    """
+    s = (user_message or "").strip().lower()
+    if not s or len(s) > 120:
+        return False
+    if is_explicit_codebase_query(s):
+        return False
+    task_cues = (
+        "function",
+        "class ",
+        "script",
+        "api ",
+        "endpoint",
+        "bug",
+        "implement",
+        "fibonacci",
+        "algorithm",
+        "regex",
+        "sql",
+        "html",
+        "docker",
+        "kubernetes",
+        "write a ",
+        "write an ",
+        "debug",
+        "refactor",
+        "patch",
+        "error message",
+        "stack trace",
+    )
+    if any(c in s for c in task_cues):
+        return False
+    phrases = (
+        "can you write code",
+        "can you code",
+        "do you write code",
+        "can you program",
+        "are you a programmer",
+        "what can you do",
+        "what are you",
+        "who are you",
+        "how do you work",
+        "are you an ai",
+        "are you a bot",
+        "do you know how to code",
+    )
+    if any(p in s for p in phrases):
+        return True
+    if s in ("help", "help?", "hi", "hello", "hey"):
+        return True
+    return False
+
 
 # Local model client (Ollama / local LLM server)
 model_client = LocalModelClient()
@@ -569,11 +770,12 @@ async def _rewrite_memory_query(user_message: str) -> str:
         return (user_message or "").strip()
 
 
-async def _build_memory_context(query: str, limit: int = 5):
+async def _build_memory_context(user_message: str, query: str, limit: int = 5):
     """
-    Build a RELEVANT MEMORY context block via the Tool Bus (memory.search).
-    Formats tool result and records used_in_context for simple-memory entries.
-    Returns (block_string, snippets_list) for model context and UI visibility.
+    Build a RELEVANT MEMORY context block via the Tool Bus (memory.search),
+    then apply memory injection guardrails to prevent "memory bleed".
+
+    Returns (block_string, injected_snippets_list) for model context and UI visibility.
     """
     result = await tool_bus.execute(
         "memory.search",
@@ -582,17 +784,50 @@ async def _build_memory_context(query: str, limit: int = 5):
     )
     if not result.ok or not result.data:
         return ("", [])
-    snippets = result.data.get("snippets") or []
-    entries_for_audit = result.data.get("entries_for_audit") or []
-    for e in entries_for_audit:
+    candidates = result.data.get("candidates") or []
+
+    # Backwards compatibility: some older tool results may only provide `snippets`.
+    if not candidates:
+        snippets = result.data.get("snippets") or []
+        candidates = [{"snippet": s, "score": None} for s in snippets if s]
+
+    injected_candidates, debug = filter_relevant_memories(user_message, candidates)
+
+    try:
+        # Internal-only logging for development/debug. Not sent to the client directly.
+        print(
+            "[WhisperLeaf][memory-guard] topic_reset_detected=%s explicit_recall=%s memories_retrieved=%s memories_injected=%s best_score=%s"
+            % (
+                debug.get("topic_reset_detected"),
+                debug.get("explicit_recall_detected"),
+                debug.get("memories_retrieved"),
+                debug.get("memories_injected"),
+                debug.get("best_relevance_score", None),
+            )
+        )
+    except Exception:
+        pass
+
+    # Optional: record audit only when the candidate looks like it maps to DB ids.
+    for c in injected_candidates or []:
         try:
-            record_audit(e["id"], "used_in_context", {"route": "chat"})
+            mem_id = c.get("id")
+            if isinstance(mem_id, int):
+                record_audit(mem_id, "used_in_context", {"route": "chat", "guard": "memory_relevance_gating"})
         except Exception:
             pass
-    if not snippets:
+
+    if not injected_candidates:
         return ("", [])
-    block = "RELEVANT MEMORY:\n" + "\n".join("- " + s for s in snippets)
-    return (block, list(snippets))
+
+    snippets_injected = [(c.get("snippet") or "").strip() for c in injected_candidates if (c.get("snippet") or "").strip()]
+    if not snippets_injected:
+        return ("", [])
+
+    block = build_memory_context_block(injected_candidates)
+    if not block:
+        return ("", [])
+    return (block, snippets_injected)
 
 
 async def _build_docs_context(query: str, limit: int = 5):
@@ -682,6 +917,102 @@ async def chat_endpoint(payload: ChatRequest):
     # "no memory: ..." never stores; strip prefix and send rest to model
     no_memory = raw_message.lower().startswith("no memory:")
     message_for_model = raw_message[10:].strip() if no_memory else raw_message
+    manual_mode_override, message_for_model = parse_mode_override(message_for_model)
+
+    def detect_simple_query(user_message: str) -> bool:
+        """
+        Simple query detector.
+        Triggers for:
+        - basic math (e.g. 2x2, 2*2, 12/3, 5+7)
+        - short definition requests ("what is X", "define X")
+        - very short factual queries (1–2 tokens)
+
+        These should return direct answers only (enforced in generation path).
+        """
+        m = (user_message or "").strip()
+        if not m:
+            return False
+        lower = m.lower().strip()
+
+        # Basic math: digits + operator, very short.
+        if re.fullmatch(r"\d+\s*([xX\*\+\-\/])\s*\d+", m.strip()):
+            return True
+
+        if lower.startswith("what is ") or lower.startswith("define "):
+            tail = re.sub(r"^(what is|define)\s+", "", lower).strip(" ?.")
+            if 0 < len(tail.split()) <= 4:
+                return True
+
+        tokens = re.findall(r"[a-z0-9]+", lower)
+        if 1 <= len(tokens) <= 2 and len(lower) <= 10:
+            return True
+
+        return False
+
+    def detect_tradeoff_query(user_message: str) -> bool:
+        """Tradeoff detector for concise comparison posture (vs/better/compare)."""
+        m = (user_message or "").lower()
+        return (" vs " in m) or ("vs." in m) or ("better" in m) or ("compare" in m)
+
+    def detect_depth_intent(user_message: str) -> str:
+        """
+        Rule-based depth intent classifier.
+        Returns: "low" | "medium" | "high"
+
+        LOW: short/broad topic questions, no qualifiers.
+        HIGH: explicit procedural/analytical qualifiers (how exactly, step-by-step, compare, pros/cons, deep dive).
+        MEDIUM: everything else.
+        """
+        m = (user_message or "").strip().lower()
+        if not m:
+            return "medium"
+
+        high_cues = (
+            "how exactly",
+            "step by step",
+            "step-by-step",
+            "why does",
+            "why do",
+            "compare",
+            "pros and cons",
+            "pros/cons",
+            "deep dive",
+            "in detail",
+            "walk me through",
+            "break down",
+            "breakdown",
+            "analyze",
+            "diagnose",
+            "troubleshoot",
+            "implementation",
+            "examples",
+            "example",
+            "procedure",
+            "show me",
+            "i want to know how",
+        )
+        if any(cue in m for cue in high_cues):
+            return "high"
+
+        # MEDIUM: explanation-style "how does/how do" requests typically want
+        # more than a one-line response, even when they're short.
+        if "how does" in m or "how do" in m:
+            return "medium"
+
+        # LOW: very short and broad topic intro (and no explicit high cues)
+        tokens = re.findall(r"[a-z0-9]+", m)
+        low_broad_patterns = (
+            r"^tell me about ",
+            r"^what is ",
+            r"^what are ",
+            r"^define ",
+            r"^who is ",
+            r"^where is ",
+        )
+        is_low_intro = any(re.search(p, m) for p in low_broad_patterns)
+        if len(tokens) <= 7 and is_low_intro:
+            return "low"
+        return "medium"
 
     # Automatic memory: save likely-stable facts (deterministic heuristic)
     saved_memory_notification = None
@@ -702,12 +1033,208 @@ async def chat_endpoint(payload: ChatRequest):
         memory_query = await _rewrite_memory_query(message_for_model)
         if not (memory_query or "").strip():
             memory_query = message_for_model
-        memory_block, memory_snippets = await _build_memory_context(memory_query, limit=5)
+        # Use the live user message for pivot/relevance detection; use rewritten query only for retrieval.
+        memory_block, memory_snippets = await _build_memory_context(message_for_model, memory_query, limit=5)
     except Exception as e:
         print("[WhisperLeaf chat] memory retrieval failed (continuing without): %s" % e)
         memory_block = ""
         memory_snippets = []
     used_memory = bool(memory_block)
+    # Pivot/new-topic handling: if the user clearly switched topics but we injected no relevant memory,
+    # instruct the model to avoid false continuity language ("as we discussed", "pick up where we left off")
+    # and to keep the follow-up calm and focused.
+    topic_reset_detected = detect_topic_reset(message_for_model)
+    pivot_no_memory = topic_reset_detected and not memory_snippets
+    pivot_response_guidance = (
+        "Pivot guidance (fresh start): The user is switching topics. "
+        "Do not imply you are continuing a previous discussion on this topic "
+        "(avoid phrases like 'pick up where we left off', 'as we discussed', 'back to', or 'again'). "
+        "Acknowledge the switch briefly and ask exactly ONE direct follow-up question "
+        "to understand what the user wants next."
+        if pivot_no_memory
+        else ""
+    )
+
+    depth_intent = detect_depth_intent(message_for_model)
+    if depth_intent == "low":
+        depth_guidance = (
+            "Depth control: respond in 2–4 sentences with one clear idea. "
+            "Avoid long paragraphs and long lists. "
+            "Optional follow-up: if appropriate, end with 'If you want, I can go deeper into X.' "
+            "Do not ask generic multi-part questions."
+        )
+    elif depth_intent == "high":
+        depth_guidance = (
+            "Depth control: respond with a clearer structure (steps/breakdown) while staying calm and not overly verbose. "
+            "Prefer 3–6 short steps or a short breakdown over long blocks of text. "
+            "Avoid generic buzzwords and filler. "
+            "Do not dump everything at once; expand only what is needed to answer the request."
+        )
+    else:
+        depth_guidance = (
+            "Depth control: respond with 3–6 sentences. "
+            "You may include one small structured element (a short list or a brief contrast). "
+            "Avoid multiple questions; either no follow-up or one precise question about the next thing the user cares about."
+        )
+
+    def detect_uncertainty(user_message: str, draft_response: str = "") -> bool:
+        """
+        Lightweight uncertainty detection for epistemic honesty.
+
+        For now we trigger based on user intent (system internals, training, offline/capability
+        questions). `draft_response` is optional for future use.
+        """
+        m = (user_message or "").lower()
+        draft = (draft_response or "").lower()
+
+        internals_cues = (
+            "how do you work",
+            "how does it work",
+            "how do you respond",
+            "training",
+            "trained",
+            "fine-tune",
+            "fine tune",
+            "learned",
+            "offline",
+            "internet",
+            "without internet",
+            "knowledge graph",
+            "created from scratch",
+            "architecture",
+            "backend",
+            "sse",
+            "ollama",
+            "online learning",
+            "do you browse",
+            "can you browse",
+        )
+        speculative_cues = (
+            "note near a device",
+            "online learning",
+            "knowledge graph",
+            "created from scratch",
+            "guaranteed",
+            "definitely",
+        )
+
+        if any(cue in m for cue in internals_cues):
+            return True
+        if draft and any(cue in draft for cue in speculative_cues):
+            return True
+        return False
+
+    def build_epistemic_honesty_guidance(user_message: str) -> str:
+        m = (user_message or "").lower()
+        training_q = any(cue in m for cue in ("training", "trained", "fine-tune", "fine tune", "learned", "created from scratch"))
+        offline_q = any(cue in m for cue in ("offline", "internet", "without internet", "do you browse", "can you browse"))
+        # Generic capability boundary for internals/capability questions.
+        unknown_q = not (training_q or offline_q)
+
+        if training_q:
+            return (
+                "Epistemic honesty (training/internal question): "
+                "Do not describe your training process, data, or internal architecture as if you know it. "
+                "If asked about how you were trained or what you learned, explain the limitation plainly: "
+                "you generate responses from patterns and the current conversation context, and you do not have access "
+                "to your own training pipeline or environment details. "
+                "If you are uncertain, say you don't know and offer a safe high-level explanation instead."
+            )
+        if offline_q:
+            return (
+                "Epistemic honesty (offline/capabilities question): "
+                "If the user asks about offline usage, clarify what is and isn't possible: "
+                "WhisperLeaf can use a local model when available, but it cannot rely on online lookups/browsing. "
+                "It does not update its core model in real time; it responds based on patterns and the current context. "
+                "If you are unsure whether a local model is running, say so and suggest checking the local model service."
+            )
+        if unknown_q:
+            return (
+                "Epistemic honesty (capability boundary): "
+                "If you are not certain you can perform a task or access information, do not invent mechanisms. "
+                "State the limit (e.g., 'I don't have a way to do that right now') and offer a safe alternative: "
+                "help with steps, a conceptual explanation, or using available local features (documents/memories) when applicable."
+            )
+        return ""
+
+    honesty_guidance = ""
+    if detect_uncertainty(message_for_model):
+        honesty_guidance = build_epistemic_honesty_guidance(message_for_model)
+
+    # Response mode: conversational / creative / task-dev (engineering artifact) — see mode_router.py
+    response_mode = manual_mode_override or detect_mode(message_for_model)
+    if manual_mode_override is None and is_general_capability_meta_query(message_for_model):
+        response_mode = ResponseMode.CONVERSATIONAL
+    mode_source = "manual" if manual_mode_override is not None else "auto"
+    # TODO(debug): include response_mode/mode_source in SSE metadata behind a debug flag.
+    print(
+        "[WhisperLeaf mode] %s (%s) | %s"
+        % (response_mode.value, mode_source, explain_mode_choice(message_for_model)),
+    )
+
+    # Hard ban list for fabricated internal mechanism language.
+    # This is instruction-only (prompt guidance), not a behavior rewrite.
+    banned_internal_phrases = (
+        "knowledge graph",
+        "online learning",
+        "internalized graph",
+        "custom reasoning engine",
+        "self-updating model",
+        "self updating model",
+        "self-updating",
+        "self updating",
+    )
+    capability_hard_ban_guidance = (
+        "Capability honesty: Do NOT claim or reference unverified internal mechanisms. "
+        "Avoid these phrases entirely: "
+        + ", ".join("'" + p + "'" for p in banned_internal_phrases)
+        + ". "
+        "When discussing capabilities, use only grounded terms that match the app: "
+        "'current conversation context', 'stored memory snippets' (only if present), 'model training', 'local model'."
+    )
+
+    def detect_insight_opportunity(user_message: str) -> bool:
+        """
+        Selective insight injection trigger.
+        - Never triggers in execution mode.
+        - Triggers only on: why / tradeoff / compare / better / vs / pattern
+        """
+        m = (user_message or "").strip().lower()
+        if not m:
+            return False
+        if response_mode in (ResponseMode.TASK_DEV, ResponseMode.CREATIVE):
+            return False
+        if honesty_guidance:
+            return False
+
+        cues = ("why", "tradeoff", "trade-off", "compare", "better", " vs ", "vs.", "pattern")
+        return any(c in m for c in cues)
+
+    insight_guidance = ""
+    # Response style guardrails (localized per-request guidance).
+    # Keep identity rules in prompts/system.md unchanged.
+    previous_assistant_turns = sum(1 for m in (payload.history or []) if getattr(m, "role", None) == "assistant")
+    wants_follow_up_question = (previous_assistant_turns % 2) == 1
+    is_first_assistant_reply = previous_assistant_turns == 0
+    follow_up_guidance_line = (
+        "End with either no follow-up or an optional offer to go deeper (no question)."
+        if depth_intent == "low"
+        else (
+            "End with exactly ONE optional follow-up question."
+            if wants_follow_up_question
+            else "End with a statement (no question)."
+        )
+    )
+    response_style_guidance = (
+        "Response style: keep the reply grounded and slightly thoughtful. "
+        "Be concise (3–5 sentences for the first reply; otherwise avoid long paragraphs unless the user asks for depth). "
+        "Avoid generic buzzwords/lists; when the user is discussing a domain, prefer 1–2 concrete, mechanism-level details over vague categories. "
+        "Follow-up behavior: do not always end with a question. "
+        + follow_up_guidance_line
+        + " "
+        "Do not use salesy enthusiasm. "
+        "If pivot-specific guidance is present, follow that guidance for phrasing/follow-ups."
+    )
     doc_block = ""
     doc_sources: List[str] = []
     doc_excerpts: List[Dict[str, str]] = []
@@ -715,16 +1242,443 @@ async def chat_endpoint(payload: ChatRequest):
         doc_block, doc_sources, doc_excerpts = await _build_docs_context(memory_query, limit=5)
     except Exception as e:
         print("[WhisperLeaf chat] docs context failed (continuing without): %s" % e)
+
+    def detect_user_context_signals(injected_memory_snippets: List[str]) -> Dict[str, Any]:
+        """
+        Extract soft preference signals from injected memory/doc context.
+        This is intentionally heuristic and privacy-safe: we only infer general interests,
+        and we never expose past behavior/history to the user.
+        """
+        joined = " ".join(injected_memory_snippets or []).lower()
+
+        interests: List[str] = []
+        def _has(*words: str) -> bool:
+            return all(w in joined for w in words)
+        def _any(*words: str) -> bool:
+            return any(w in joined for w in words)
+
+        # Local/offline/privacy interest
+        if _any("local", "offline", "private", "privacy", "sovereign", "document", "documents"):
+            interests.append("local/offline privacy")
+
+        # Building/engineering interest (documents, tools, benchmarks, measuring)
+        if _any("build", "bench", "energy", "benchmark", "measure", "tool", "document", "chunks"):
+            interests.append("building and benchmarking")
+
+        # Memory/knowing-what-matters interest
+        if _any("memory", "memories", "remember"):
+            interests.append("memory-aware chats")
+
+        interests = interests[:3]
+
+        # Style cue (very soft): inferred from user's depth intent.
+        if depth_intent == "low":
+            style = "concise"
+        elif depth_intent == "high":
+            style = "structured"
+        else:
+            style = "balanced"
+
+        return {
+            "interests": interests,
+            "style": style,
+        }
+
+    def detect_personalization_opportunity(
+        user_message: str,
+        context_signals: Dict[str, Any],
+        topic_reset_detected: bool,
+    ) -> bool:
+        """
+        Decide whether to add ONE subtle contextual adjustment.
+
+        Rules:
+        - never personalize for simple factual definition questions
+        - never personalize when pivot reset detected but no relevant injected memory exists
+        - overlap must be clear (avoid creepy guessing)
+        """
+        m = (user_message or "").lower().strip()
+        if not m:
+            return False
+
+        # Don't personalize for simple definitions/facts.
+        if any(p in m for p in ("what is ", "what are ", "define ", "who is ", "where is ", "2+2", "3+3")):
+            return False
+
+        if honesty_guidance:
+            return False
+
+        if topic_reset_detected and not memory_snippets:
+            return False
+
+        interests = context_signals.get("interests") or []
+        if not interests:
+            return False
+
+        # Clear overlap checks based on interest category keywords.
+        interest_hits = False
+        if "local/offline privacy" in interests and any(w in m for w in ("local", "offline", "privacy", "private", "sovereign", "documents")):
+            interest_hits = True
+        if "building and benchmarking" in interests and any(w in m for w in ("build", "benchmark", "bench", "energy", "measure", "documents", "chunks", "system")):
+            interest_hits = True
+        if "memory-aware chats" in interests and any(w in m for w in ("memory", "memories", "remember", "context", "sources")):
+            interest_hits = True
+
+        # Allow reflective phrasing that invites tailoring.
+        reflective_hits = any(w in m for w in ("in your case", "in my case", "for what i'm building", "for what i'm working on", "i'm building", "i'm working on"))
+        return interest_hits or reflective_hits
+
+    personalization_guidance = ""
+    context_signals = detect_user_context_signals(memory_snippets)
+    if response_mode != ResponseMode.CREATIVE and detect_personalization_opportunity(
+        message_for_model, context_signals, topic_reset_detected
+    ):
+        interest_topic = (context_signals.get("interests") or [None])[0]
+        if interest_topic:
+            personalization_guidance = (
+                "Lightweight personalization: If it fits naturally, append ONE short sentence AFTER your main answer "
+                "that softly ties the guidance to the user's apparent focus (e.g., 'In your case, especially given your focus on local/offline privacy…'). "
+                "Use cautious language (may/especially/if). Do not sound like surveillance, do not mention history, "
+                "and do not add extra questions."
+            )
+
+    # user_mode shapes prompts; "execution" is reserved for TASK_DEV (structured engineering output only).
+    if manual_mode_override is None and is_general_capability_meta_query(message_for_model):
+        user_mode = "learning"
+    elif response_mode == ResponseMode.TASK_DEV:
+        user_mode = "execution"
+    elif response_mode == ResponseMode.CREATIVE:
+        user_mode = "creative"
+    else:
+        user_mode = conversational_posture(message_for_model)
+
+    # Bypass optional layers for task-dev artifacts and direct creative output.
+    if user_mode == "execution":
+        personalization_guidance = ""
+        insight_guidance = ""
+    elif user_mode == "creative":
+        personalization_guidance = ""
+
+    def validate_execution_output(text: str) -> Dict[str, Any]:
+        """
+        Lightweight post-generation validator for execution artifacts.
+        Returns: { ok: bool, issues: [str] }
+
+        Requirements:
+        - artifact-only (no intro/outro prose)
+        - includes required sections
+        - references at least one real WhisperLeaf component
+        - avoids common generic/explanatory phrases
+        """
+        t = (text or "").strip()
+        issues: List[str] = []
+        if not t:
+            return {"ok": False, "issues": ["empty_output"]}
+
+        lower = t.lower()
+        banned_explanations = (
+            "this prompt",
+            "this guides",
+            "you can use",
+            "for example",
+            "for instance",
+        )
+        if any(p in lower for p in banned_explanations):
+            issues.append("contains_explanatory_phrases")
+
+        # Structure checks (must be present)
+        required_headers = ("objective", "requirements", "files/functions", "tests")
+        if not all(h in lower for h in required_headers):
+            issues.append("missing_required_sections")
+
+        real_components = (
+            "src/core/main.py",
+            "src/core/tools/memory_search_tool.py",
+            "src/core/memory_injection_guard.py",
+            "tests/test_memory_bleed_guard.py",
+        )
+        if not any(p.lower() in lower for p in real_components):
+            issues.append("missing_real_component_references")
+
+        generic_smells = (
+            "placeholder",
+            "keyword filtering",
+            "filter keywords",
+            "some function",
+            "some file",
+        )
+        if any(p in lower for p in generic_smells):
+            issues.append("generic_or_placeholder_logic")
+
+        return {"ok": len(issues) == 0, "issues": issues}
+
+    def strip_to_execution_artifact(text: str) -> str:
+        """
+        Best-effort cleanup: return only the artifact, starting at Objective.
+        Removes obvious explanation lines outside required sections.
+        """
+        t = (text or "").strip()
+        if not t:
+            return ""
+        lines = t.splitlines()
+        start = 0
+        for i, line in enumerate(lines):
+            if line.strip().lower().startswith("objective"):
+                start = i
+                break
+        core = "\n".join(lines[start:]).strip()
+        # Remove a few common explanatory lead-ins if they slipped inside.
+        cleaned_lines = []
+        for line in core.splitlines():
+            l = line.strip().lower()
+            if any(p in l for p in ("this prompt", "this guides", "you can use", "for example")):
+                continue
+            cleaned_lines.append(line)
+        return "\n".join(cleaned_lines).strip()
+
+    def trim_execution_artifact(text: str) -> str:
+        """
+        Tighten execution artifacts to feel senior-engineer crisp:
+        - remove filler phrases
+        - cap list sizes (Requirements <= 6, Tests <= 4)
+        - avoid redundancy by keeping only the most concrete lines
+        Preserves strict section structure.
+        """
+        t = strip_to_execution_artifact(text or "")
+        if not t:
+            return ""
+
+        filler_phrases = (
+            "ensure that",
+            "make sure to",
+            "you should",
+            "consider",
+            "this prompt",
+            "this guides",
+        )
+
+        lines = [ln.rstrip() for ln in t.splitlines()]
+        out: List[str] = []
+        section = None
+        req_count = 0
+        test_count = 0
+
+        def _is_header(line: str) -> bool:
+            s = line.strip().lower()
+            return s.startswith("objective") or s.startswith("requirements") or s.startswith("files/functions") or s.startswith("tests")
+
+        def _clean_line(line: str) -> str:
+            s = line
+            low = s.lower()
+            for fp in filler_phrases:
+                if fp in low:
+                    # drop the whole line if it's mostly filler
+                    if len(s.strip()) <= len(fp) + 12:
+                        return ""
+                    # otherwise remove phrase
+                    s = re.sub(re.escape(fp), "", s, flags=re.IGNORECASE).strip()
+                    low = s.lower()
+            # tighten common verbose patterns
+            s = s.replace("Add a function that will", "Add")
+            s = s.replace("Add a function that", "Add")
+            s = s.replace("Make sure to include", "Include")
+            return s.strip()
+
+        for ln in lines:
+            if not ln.strip():
+                # keep single blank lines between sections
+                if out and out[-1] != "":
+                    out.append("")
+                continue
+
+            if _is_header(ln):
+                section = ln.strip().split(":")[0].strip().lower()
+                out.append(ln.strip())
+                continue
+
+            cleaned = _clean_line(ln)
+            if not cleaned:
+                continue
+
+            low = cleaned.lower()
+            if section == "requirements":
+                # cap 6 items; keep numbered/bulleted lines only
+                if low.startswith(("-", "*")) or re.match(r"^\d+[\).\s]", cleaned):
+                    req_count += 1
+                    if req_count <= 6:
+                        out.append(cleaned)
+                else:
+                    # compress prose into a single bullet when possible
+                    req_count += 1
+                    if req_count <= 6:
+                        out.append("- " + cleaned)
+                continue
+
+            if section == "tests":
+                if low.startswith(("-", "*")) or re.match(r"^\d+[\).\s]", cleaned) or low.startswith("tests:"):
+                    test_count += 1
+                    if test_count <= 4:
+                        out.append(cleaned)
+                else:
+                    test_count += 1
+                    if test_count <= 4:
+                        out.append("- " + cleaned)
+                continue
+
+            # Objective and Files/Functions: keep short, concrete lines
+            out.append(cleaned)
+
+        # Remove trailing blank lines
+        while out and out[-1] == "":
+            out.pop()
+        return "\n".join(out).strip()
+
+    if detect_insight_opportunity(message_for_model):
+        # Selective insight injection: one sentence, high-signal; off for task-dev and creative modes.
+        # If personalization is also active, merge into the same single sentence.
+        if personalization_guidance:
+            insight_guidance = (
+                "Selective insight (merged): After your main answer, add ONE short sentence (15–20 words) "
+                "that combines either a tradeoff/pattern/implication with a soft 'in your case' tie-in. "
+                "It must add new information (not restate), avoid fluff, avoid vague generalities, and must not be a question. "
+                "If you can't add something genuinely new, omit the sentence."
+            )
+            personalization_guidance = ""
+        else:
+            insight_guidance = (
+                "Selective insight: After your main answer, optionally add ONE short sentence (15–20 words). "
+                "It must be a pattern, tradeoff, or hidden implication directly tied to the question. "
+                "No motivational fluff, no obvious restatement, no vague generalities, and not a question. "
+                "Validator: if it adds no new information, omit it."
+            )
+
+    _anti_spec = anti_engineering_scaffolding_instruction()
+    mode_guidance = ""
+    if user_mode == "execution" and engineering_scaffolding_allowed(response_mode):
+        mode_guidance = (
+            "Mode shaping: respond in an execution posture. Be concise and actionable. "
+            "Direct-artifact rule: if the user asks for a prompt, command, code, checklist, or steps, "
+            "output that artifact FIRST (as the first content block) with minimal preamble. "
+            "Execution quality bar: the artifact must be system-aware and match WhisperLeaf's actual codebase. "
+            "Do NOT use placeholder logic or arbitrary examples. "
+            "Do NOT include an explanation layer (no prose outside the artifact) unless the user explicitly asks. "
+            "Structure enforcement: include Objective, Requirements, Files/components to modify (use real paths), "
+            "Concrete changes (functions/branches), and Tests to add/run. "
+            "When relevant to this app, reference these real components: "
+            "src/core/main.py (chat prompt assembly + SSE meta), "
+            "src/core/tools/memory_search_tool.py (memory.search candidates), "
+            "src/core/memory_injection_guard.py (pivot detection, relevance thresholds, blocked categories, caps), "
+            "tests/test_memory_bleed_guard.py (guard tests). "
+            "Quality check: before finalizing, verify the artifact mentions the correct files/functions/thresholds; "
+            "if it is generic, rewrite silently to be specific and aligned, then output only the final artifact."
+        )
+    elif user_mode == "creative":
+        mode_guidance = (
+            "Mode shaping: creative request. Produce the creative output directly (poem, story, lyrics, names, etc.). "
+            + _anti_spec
+            + " "
+            "Do not wrap the answer in software planning sections or a task checklist."
+        )
+    elif user_mode == "strategy":
+        mode_guidance = (
+            "Mode shaping: respond in a strategy posture. Present 2–3 options and the key tradeoff(s). "
+            + _anti_spec
+            + " "
+            "Call out one implication. Keep it calm and not verbose."
+        )
+    else:
+        mode_guidance = (
+            "Mode shaping: conversational answer. Be natural and directly helpful. "
+            + _anti_spec
+            + " "
+            "Give a clear explanation with a simple mental model when teaching; keep it grounded and concise."
+        )
+
+    # InsightBox (mode-aware framing guidance). Additive only; does not replace any existing behavior.
+    try:
+        insight_box_guidance = build_mode_guidance(response_mode)
+        if insight_box_guidance:
+            mode_guidance = (mode_guidance + "\n\n" + insight_box_guidance).strip()
+    except Exception:
+        # Guidance must never break chat request handling.
+        pass
+
+    user_facing_privacy_guidance = ""
+    if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
+        user_facing_privacy_guidance = (
+            "User-facing boundary: Do not mention WhisperLeaf internal file paths (e.g. src/core/), "
+            "specific .py paths in this repo, internal modules, system prompts, internal tool names, "
+            "or non-public architecture. Do not repeat such details from retrieved context. "
+            "Answer with portable examples and general software concepts unless the user explicitly "
+            "asks about WhisperLeaf's codebase or system design."
+        )
+
     if memory_block or doc_block:
         note = "Note: You may use the context below to answer.\n\n"
         parts = [note]
+        if pivot_response_guidance:
+            parts.insert(0, pivot_response_guidance)
+        if response_style_guidance:
+            parts.insert(0, response_style_guidance)
+        if depth_guidance:
+            parts.insert(0, depth_guidance)
+        if honesty_guidance:
+            parts.insert(0, honesty_guidance)
+        # Hard ban applies for execution mode and for explicit capability/internal questions.
+        if user_mode == "execution" or honesty_guidance:
+            parts.insert(0, capability_hard_ban_guidance)
+        if insight_guidance:
+            parts.insert(0, insight_guidance)
+        if personalization_guidance:
+            parts.insert(0, personalization_guidance)
+        if mode_guidance:
+            # Final shaping layer: influences posture without announcing a "mode".
+            parts.insert(0, mode_guidance)
+        if user_facing_privacy_guidance:
+            parts.insert(0, user_facing_privacy_guidance)
         if memory_block:
             parts.append(memory_block)
         if doc_block:
             parts.append(doc_block)
         user_content = "\n\n".join(parts) + "\n\nUser message:\n" + message_for_model
     else:
-        user_content = message_for_model
+        if pivot_response_guidance or response_style_guidance:
+            prefix_parts = []
+            if pivot_response_guidance:
+                prefix_parts.append(pivot_response_guidance)
+            if response_style_guidance:
+                prefix_parts.append(response_style_guidance)
+            if depth_guidance:
+                prefix_parts.append(depth_guidance)
+            if honesty_guidance:
+                prefix_parts.append(honesty_guidance)
+            if user_mode == "execution" or honesty_guidance:
+                prefix_parts.append(capability_hard_ban_guidance)
+            if mode_guidance:
+                prefix_parts.append(mode_guidance)
+            if user_facing_privacy_guidance:
+                prefix_parts.insert(0, user_facing_privacy_guidance)
+            user_content = "\n\n".join(prefix_parts) + "\n\nUser message:\n" + message_for_model
+        else:
+            if mode_guidance and depth_guidance:
+                _layers = [user_facing_privacy_guidance, mode_guidance, depth_guidance]
+                user_content = "\n\n".join(x for x in _layers if x) + "\n\nUser message:\n" + message_for_model
+            elif mode_guidance:
+                if user_mode == "execution":
+                    user_content = (
+                        mode_guidance + "\n\n" + capability_hard_ban_guidance + "\n\nUser message:\n" + message_for_model
+                    )
+                else:
+                    _layers = [user_facing_privacy_guidance, mode_guidance]
+                    user_content = "\n\n".join(x for x in _layers if x) + "\n\nUser message:\n" + message_for_model
+            else:
+                if depth_guidance:
+                    _layers = [user_facing_privacy_guidance, depth_guidance]
+                    user_content = "\n\n".join(x for x in _layers if x) + "\n\nUser message:\n" + message_for_model
+                elif user_facing_privacy_guidance:
+                    user_content = user_facing_privacy_guidance + "\n\nUser message:\n" + message_for_model
+                else:
+                    user_content = message_for_model
     messages.append({"role": "user", "content": user_content})
 
     session_id = getattr(payload, "session_id", None)
@@ -749,6 +1703,11 @@ async def chat_endpoint(payload: ChatRequest):
         if session_summary
         else SYSTEM_PROMPT
     )
+    if DEVELOPER_MODE:
+        effective_system += (
+            "\n\n---\nDeveloper mode is enabled on this server: you may discuss WhisperLeaf's internal "
+            "architecture, repository paths, modules, and implementation details when relevant.\n"
+        )
 
     async def generate() -> Any:
         full_reply = ""
@@ -773,13 +1732,144 @@ async def chat_endpoint(payload: ChatRequest):
                 })
                 yield _sse_message("meta", meta)
             try:
+                simple_query = detect_simple_query(message_for_model)
+                tradeoff_query = detect_tradeoff_query(message_for_model)
+                # Creative output is often multi-line; do not force simple/tradeoff validators on it.
+                if response_mode == ResponseMode.CREATIVE:
+                    simple_query = False
+                    tradeoff_query = False
+
+                def _count_sentences(s: str) -> int:
+                    return len(re.findall(r"[.!?]+", (s or "").strip()))
+
+                def _contains_teaching(s: str) -> bool:
+                    low = (s or "").lower()
+                    return any(p in low for p in ("can be thought of as", "this means", "in this case"))
+
+                def _validate_simple_reply(s: str) -> bool:
+                    t = (s or "").strip()
+                    if not t:
+                        return False
+                    if _contains_teaching(t):
+                        return False
+                    # Direct answer only (single sentence/line).
+                    if _count_sentences(t) > 1:
+                        return False
+                    if "\n" in t:
+                        return False
+                    return True
+
+                def _validate_tradeoff_reply(s: str) -> bool:
+                    t = (s or "").strip()
+                    if not t:
+                        return False
+                    # Max 3 sentences total (2-line main + 1 insight).
+                    if _count_sentences(t) > 3:
+                        return False
+                    lines = [ln for ln in t.splitlines() if ln.strip()]
+                    if len(lines) > 3:
+                        return False
+                    if len(lines) < 2:
+                        return False
+                    # Teaching language only allowed if user asked why/how.
+                    if not any(w in (message_for_model or "").lower() for w in ("why", "how")) and _contains_teaching(t):
+                        return False
+                    # Require an insight line for tradeoff triggers.
+                    if len(lines) < 3:
+                        return False
+                    return True
+
+                # Simple/tradeoff enforcement: buffered generation + one rewrite pass.
+                if simple_query or tradeoff_query:
+                    reply = await model_client.chat(effective_system, messages)
+                    reply = (reply or "").strip()
+                    ok = _validate_simple_reply(reply) if simple_query else _validate_tradeoff_reply(reply)
+                    if not ok:
+                        if simple_query:
+                            rewrite_instructions = (
+                                "Rewrite to comply exactly:\n"
+                                "- Output ONLY the direct answer.\n"
+                                "- No explanation, no teaching ('this means', 'can be thought of as', 'in this case').\n"
+                                "- No insight sentence.\n"
+                                "- One line only.\n\n"
+                                "Original:\n"
+                            )
+                        else:
+                            rewrite_instructions = (
+                                "Rewrite to comply exactly:\n"
+                                "- Line 1–2: main answer (max two short lines).\n"
+                                "- Line 3: ONE insight sentence (15–20 words) stating a tradeoff/pattern/implication.\n"
+                                "- Total <= 3 sentences.\n"
+                                "- No teaching language unless the user asked 'why' or 'how'.\n"
+                                "- No questions.\n\n"
+                                "Original:\n"
+                            )
+                        rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
+                        reply2 = await model_client.chat(effective_system, rewrite_messages)
+                        reply2 = (reply2 or "").strip()
+                        ok2 = _validate_simple_reply(reply2) if simple_query else _validate_tradeoff_reply(reply2)
+                        reply = reply2 if ok2 else reply
+                    if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
+                        if response_contains_internal_leak(reply):
+                            reply = await rewrite_reply_without_internals(model_client, reply)
+                    full_reply = reply
+                    yield _sse_message("chunk", full_reply)
+                    yield _sse_message("done", "")
+                    if session_id and session_id in CHAT_SESSIONS:
+                        CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
+                    return
+
+                # Execution-mode stabilization: generate full artifact, validate, optionally rewrite once.
+                if user_mode == "execution":
+                    reply = await model_client.chat(effective_system, messages)
+                    reply = (reply or "").strip()
+                    v1 = validate_execution_output(reply)
+                    if not v1.get("ok"):
+                        # One internal rewrite pass (no extra user-visible text).
+                        rewrite_instructions = (
+                            "Rewrite the output to comply EXACTLY with the required execution artifact format:\n"
+                            "- Objective (1 line)\n"
+                            "- Requirements (numbered)\n"
+                            "- Files/Functions to update\n"
+                            "- Tests\n"
+                            "No intro/outro prose. Must reference at least one real component path.\n"
+                            "Brevity: keep each section minimal; Requirements <= 6 items; Tests <= 4 items.\n"
+                            "Avoid filler phrases: 'ensure that', 'make sure to', 'you should', 'consider'.\n"
+                            "Avoid phrases: 'this prompt', 'you can use', 'for example'.\n\n"
+                            "Original output:\n"
+                        )
+                        rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
+                        reply2 = await model_client.chat(effective_system, rewrite_messages)
+                        reply2 = (reply2 or "").strip()
+                        v2 = validate_execution_output(reply2)
+                        if v2.get("ok"):
+                            reply = reply2
+                        else:
+                            reply = strip_to_execution_artifact(reply2 or reply)
+                    full_reply = trim_execution_artifact(reply)
+                    yield _sse_message("chunk", full_reply)
+                    yield _sse_message("done", "")
+                    if session_id and session_id in CHAT_SESSIONS:
+                        CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
+                    return
+
                 chunk_count = 0
-                async for chunk in model_client.chat_stream(effective_system, messages):
-                    full_reply += chunk
-                    chunk_count += 1
-                    if chunk_count == 1:
-                        print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
-                    yield _sse_message("chunk", chunk)
+                if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
+                    async for chunk in model_client.chat_stream(effective_system, messages):
+                        full_reply += chunk
+                        chunk_count += 1
+                        if chunk_count == 1:
+                            print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
+                    if response_contains_internal_leak(full_reply):
+                        full_reply = await rewrite_reply_without_internals(model_client, full_reply)
+                    yield _sse_message("chunk", full_reply)
+                else:
+                    async for chunk in model_client.chat_stream(effective_system, messages):
+                        full_reply += chunk
+                        chunk_count += 1
+                        if chunk_count == 1:
+                            print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
+                        yield _sse_message("chunk", chunk)
                 print("[WhisperLeaf chat] stream done chunks=%s reply_len=%s" % (chunk_count, len(full_reply)))
                 if full_reply:
                     print("[WhisperLeaf debug] assembled backend reply (first 120 chars): %r" % full_reply[:120])
@@ -835,6 +1925,22 @@ async def clear_chat_session(body: ChatClearBody):
         CHAT_SESSIONS.pop(body.session_id, None)
         SESSION_SUMMARIES.pop(body.session_id, None)
     return {"ok": True}
+
+
+class DevModeBody(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/dev-mode")
+def get_dev_mode():
+    return {"developer_mode": DEVELOPER_MODE}
+
+
+@app.post("/api/dev-mode")
+def set_dev_mode(body: DevModeBody):
+    global DEVELOPER_MODE
+    DEVELOPER_MODE = body.enabled
+    return {"developer_mode": DEVELOPER_MODE}
 
 
 # -------------------------------------------------------------------
