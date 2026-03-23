@@ -20,6 +20,7 @@ def _run_memory_search(
     Same logic as chat's _build_memory_context: semantic search, then keyword, then recency.
     Returns snippets and entries_for_audit so the caller can format and record audit.
     """
+    candidates: List[Dict[str, Any]] = []
     snippets: List[str] = []
     entries_for_audit: List[Dict[str, Any]] = []
 
@@ -30,10 +31,24 @@ def _run_memory_search(
             privacy_level=PrivacyLevel.PRIVATE,
         )
         if results:
-            for entry, _ in results:
+            # results are (MemoryEntry, similarity_score)
+            for entry, score in results:
                 content = (getattr(entry, "content", None) or "").strip()
-                if content:
-                    snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
+                title = (getattr(entry, "title", None) or "").strip()
+                raw = content or title
+                if raw:
+                    snippet = raw[:400] + ("..." if len(raw) > 400 else "")
+                    candidates.append(
+                        {
+                            "id": getattr(entry, "id", None),
+                            "snippet": snippet,
+                            "raw": raw,
+                            "score": score,
+                            "categories": getattr(getattr(entry, "metadata", None), "categories", []) or [],
+                            "tags": getattr(getattr(entry, "metadata", None), "tags", []) or [],
+                        }
+                    )
+                    snippets.append(snippet)
     except Exception:
         pass
 
@@ -46,20 +61,39 @@ def _run_memory_search(
                 for e in entries_for_audit:
                     content = (e.get("content") or "").strip()
                     if content:
-                        snippets.append(content[:400] + ("..." if len(content) > 400 else ""))
+                        snippet = content[:400] + ("..." if len(content) > 400 else "")
+                        candidates.append(
+                            {
+                                "id": e.get("id"),
+                                "snippet": snippet,
+                                "raw": content,
+                                "score": None,
+                            }
+                        )
+                        snippets.append(snippet)
         except Exception:
             entries_for_audit = []
 
     if not snippets:
         entries_for_audit = get_recent_memory_entries(limit=top_k, exclude_blocked=True)
-        snippets = [
-            (e.get("content") or "").strip()[:400]
-            + ("..." if len((e.get("content") or "")) > 400 else "")
-            for e in entries_for_audit
-            if (e.get("content") or "").strip()
-        ]
+        candidates = []
+        for e in entries_for_audit:
+            raw = (e.get("content") or "").strip()
+            if not raw:
+                continue
+            snippet = raw[:400] + ("..." if len(raw) > 400 else "")
+            candidates.append(
+                {
+                    "id": e.get("id"),
+                    "snippet": snippet,
+                    "raw": raw,
+                    "score": None,
+                }
+            )
+        snippets = [c["snippet"] for c in candidates if c.get("snippet")]
 
-    return {"snippets": snippets, "entries_for_audit": entries_for_audit}
+    # Caller should prefer `candidates` (structured). Keep `snippets` for backwards compatibility.
+    return {"candidates": candidates, "snippets": snippets, "entries_for_audit": entries_for_audit}
 
 
 def make_memory_search_handler(memory_search_instance: Any):
