@@ -60,6 +60,7 @@ from .mode_router import (
     parse_mode_override,
 )
 from .insight_box import build_mode_guidance
+from .capture_mode import build_capture_mode_guidance, is_leaflink_originated_message
 from .memory import (
     init_memory_db,
     save_memory,
@@ -1533,8 +1534,13 @@ async def chat_endpoint(payload: ChatRequest):
             out.pop()
         return "\n".join(out).strip()
 
-    if detect_insight_opportunity(message_for_model):
+    # LeafLink paste detection (shared for insight gating + Capture Mode guidance below).
+    # Future: replace marker check with client metadata (e.g. JSON source field) or classifier.
+    _leaflink_capture_message = is_leaflink_originated_message(message_for_model)
+
+    if not _leaflink_capture_message and detect_insight_opportunity(message_for_model):
         # Selective insight injection: one sentence, high-signal; off for task-dev and creative modes.
+        # Skipped for LeafLink captures — Capture Mode handles end framing without extra "insight" sentences.
         # If personalization is also active, merge into the same single sentence.
         if personalization_guidance:
             insight_guidance = (
@@ -1602,6 +1608,11 @@ async def chat_endpoint(payload: ChatRequest):
     except Exception:
         # Guidance must never break chat request handling.
         pass
+
+    # Capture Mode: Applied to LeafLink-originated content (matches UI paste markers).
+    # Future: expand with explicit channel flag / classification from the client.
+    if _leaflink_capture_message:
+        mode_guidance = (mode_guidance + "\n\n" + build_capture_mode_guidance()).strip()
 
     user_facing_privacy_guidance = ""
     if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
