@@ -390,6 +390,99 @@
       font-size: 1rem;
       letter-spacing: 0.02em;
     }
+    .card-header-left {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      min-width: 0;
+    }
+    .card-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+    .btn-settings {
+      flex-shrink: 0;
+      width: 1.5rem;
+      height: 1.5rem;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      color: #8b949e;
+      font-size: 0.85rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+    }
+    .btn-settings:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #c9d1d9;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .settings-modal {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 2000;
+      min-width: 280px;
+      max-width: 90vw;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    }
+    .settings-modal.hidden {
+      display: none;
+    }
+    .settings-modal h3 {
+      margin: 0 0 12px 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 10px 0;
+      gap: 12px;
+    }
+    .settings-note {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin: 0 0 16px 0;
+      line-height: 1.45;
+    }
+    .settings-modal .btn-close-settings {
+      margin-top: 4px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e6edf3;
+      cursor: pointer;
+    }
+    .settings-modal .btn-close-settings:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .dev-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #22c55e;
+      margin-left: 0;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+    .dev-badge.hidden {
+      display: none;
+    }
     .btn-onboarding-help {
       flex-shrink: 0;
       width: 1.5rem;
@@ -1441,8 +1534,14 @@
     <main class="app-main">
       <div class="main-card">
         <div class="card-header">
-          <span>WhisperLeaf Chat</span>
-          <button type="button" id="onboardingHelpBtn" class="btn-onboarding-help" title="Show welcome / help" aria-label="Show welcome and help">?</button>
+          <div class="card-header-left">
+            <span>WhisperLeaf Chat</span>
+            <div id="devModeBadge" class="dev-badge hidden" aria-live="polite">Developer Mode</div>
+          </div>
+          <div class="card-header-actions">
+            <button type="button" id="settingsBtn" class="btn-settings" title="Advanced settings" aria-label="Advanced settings">⚙</button>
+            <button type="button" id="onboardingHelpBtn" class="btn-onboarding-help" title="Show welcome / help" aria-label="Show welcome and help">?</button>
+          </div>
         </div>
         <div class="chat-status" aria-live="polite">Local AI · Llama 3.2 · Private</div>
         <div id="modelUnavailableBanner" class="model-unavailable-banner hidden" role="status" aria-live="polite">
@@ -1527,6 +1626,18 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <div id="settingsModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <h3 id="settingsModalTitle">Advanced Settings</h3>
+    <label class="toggle-row">
+      <span>Developer Mode</span>
+      <input type="checkbox" id="devModeToggle" aria-describedby="devModeNote" />
+    </label>
+    <p id="devModeNote" class="settings-note">
+      Allows WhisperLeaf to discuss internal codebase and architecture details.
+    </p>
+    <button type="button" id="closeSettings" class="btn-close-settings">Close</button>
   </div>
 
   <script src="/static/js/chat.js"></script>

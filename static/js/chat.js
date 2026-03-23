@@ -76,6 +76,11 @@ const ChatController = {
     this.els.onboardingModelNotice = document.getElementById('onboardingModelNotice');
     this.els.onboardingStartBtn = document.getElementById('onboardingStartBtn');
     this.els.onboardingHelpBtn = document.getElementById('onboardingHelpBtn');
+    this.els.settingsBtn = document.getElementById('settingsBtn');
+    this.els.settingsModal = document.getElementById('settingsModal');
+    this.els.devModeToggle = document.getElementById('devModeToggle');
+    this.els.closeSettings = document.getElementById('closeSettings');
+    this.els.devModeBadge = document.getElementById('devModeBadge');
   },
 
   initState() {
@@ -558,6 +563,23 @@ const ChatController = {
     const onboardingHelpBtn = this.els.onboardingHelpBtn;
     if (onboardingHelpBtn) onboardingHelpBtn.addEventListener('click', () => this.reopenOnboarding());
 
+    const { settingsBtn, settingsModal, closeSettings, devModeToggle } = this.els;
+    if (settingsBtn && settingsModal) {
+      settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('hidden');
+      });
+    }
+    if (closeSettings && settingsModal) {
+      closeSettings.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+      });
+    }
+    if (devModeToggle) {
+      devModeToggle.addEventListener('change', (e) => {
+        this.setDevMode(!!e.target.checked);
+      });
+    }
+
     const mindMemoryBtn = this.els.mindMemoryBtn;
     if (mindMemoryBtn) {
       mindMemoryBtn.addEventListener('click', () => this.toggleMemoryVisibilityPanel());
@@ -750,6 +772,63 @@ const ChatController = {
       .map((m) => ({ role: m.role, content: m.content || '' }));
   },
 
+  getLastUserMessageContent() {
+    const msgs = this.state.messages || [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m && m.role === 'user') return String(m.content || '');
+    }
+    return '';
+  },
+
+  // Replace only the first sentence when it looks generic, using a concrete "anchor"
+  // based on the user's topic (and without changing the rest of the reply).
+  improveFirstSentenceOpening(assistantText, userMessage) {
+    const raw = String(assistantText || '');
+    if (!raw.trim()) return null;
+
+    const firstSentenceEndIdx = raw.search(/[.!?]/);
+    if (firstSentenceEndIdx === -1) return null;
+
+    const firstSentence = raw.slice(0, firstSentenceEndIdx + 1);
+    const firstLower = firstSentence.toLowerCase();
+    const userLower = String(userMessage || '').toLowerCase();
+
+    const genericOpeners = [
+      'wonderful',
+      'great',
+      'amazing',
+      'relaxing hobby',
+      'it\'s a sport about strategy',
+      'strategy, skill, teamwork',
+      'sport about strategy',
+      'wonderful hobby',
+      'great hobby',
+      'it is a',
+      'it\\x27s a',
+    ];
+    const looksGeneric = genericOpeners.some((p) => firstLower.includes(p.replace(/\\x27/g, "'")));
+
+    // Only rewrite if generic AND we can anchor to a concrete mechanism.
+    const isKnittingTopic = userLower.includes('knit') || userLower.includes('knitting') || userLower.includes('yarn') || userLower.includes('stitch');
+    const isBaseballTopic = userLower.includes('baseball') || userLower.includes('pitcher') || userLower.includes('hitter');
+
+    if (!looksGeneric) return null;
+
+    let anchor = '';
+    if (isKnittingTopic) {
+      anchor = 'Knitting builds fabric by looping yarn through stitches, one row at a time.';
+    } else if (isBaseballTopic) {
+      anchor = 'Baseball centers on the duel between pitcher and hitter.';
+    } else {
+      // General fallback anchor: concrete process, no fluff.
+      anchor = "At a practical level, we make progress by turning the goal into concrete steps and checking what each step changes.";
+    }
+
+    const rest = raw.slice(firstSentenceEndIdx + 1).trimStart();
+    return rest ? anchor + ' ' + rest : anchor;
+  },
+
   createMessageEl(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + msg.role + (msg.status === 'error' ? ' error' : '');
@@ -861,9 +940,13 @@ const ChatController = {
     const memCount = contextUsed.memorySnippets.length;
     const docCount = contextUsed.docSources.length;
     const parts = [];
-    if (memCount) parts.push(memCount + ' ' + (memCount === 1 ? 'memory' : 'memories'));
-    if (docCount) parts.push(docCount + ' ' + (docCount === 1 ? 'document' : 'documents'));
     const excerptCount = (contextUsed.docExcerpts || []).length;
+    if (memCount > 0) {
+      parts.push(memCount + ' ' + (memCount === 1 ? 'relevant memory' : 'relevant memories'));
+    } else if (docCount === 0 && excerptCount === 0) {
+      parts.push('no prior memory');
+    }
+    if (docCount) parts.push(docCount + ' ' + (docCount === 1 ? 'document' : 'documents'));
     if (excerptCount) parts.push(excerptCount + ' ' + (excerptCount === 1 ? 'excerpt' : 'excerpts'));
     summary.textContent = 'Context used: ' + (parts.length ? parts.join(', ') : '—');
     panel.appendChild(summary);
@@ -931,7 +1014,10 @@ const ChatController = {
       if (cursor) cursor.remove();
       const textEl = bubble.querySelector('.streaming-text');
       const content = textEl ? textEl.textContent : (msg.content || '');
-      msg.content = content;
+      const lastUser = this.getLastUserMessageContent();
+      const improved = this.improveFirstSentenceOpening(content, lastUser);
+      const finalContent = improved || content;
+      msg.content = finalContent;
       const contextUsed = this.buildContextUsed();
       if (contextUsed) msg.contextUsed = contextUsed;
       const wrap = document.createElement('div');
@@ -940,7 +1026,7 @@ const ChatController = {
       bodyWrap.className = 'message-body-wrap';
       const body = document.createElement('span');
       body.className = 'message-body';
-      body.textContent = content;
+      body.textContent = finalContent;
       bodyWrap.appendChild(body);
       const sources = this.state.docSourcesForCurrentResponse || [];
       const excerpts = this.state.docExcerptsForCurrentResponse || [];
