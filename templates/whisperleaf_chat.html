@@ -286,13 +286,151 @@
     /* Main content: two-column grid (chat + LeafLink). Phase 1: right column is mock inbox only. */
     .app-main {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
       gap: 1rem;
       align-items: stretch;
       padding: 1rem;
       min-width: 0;
       min-height: 0;
       height: 100%;
+      transition: grid-template-columns 0.32s ease, gap 0.32s ease;
+    }
+
+    /* Phase 5: Right panel collapse — directional chevrons; future: mobile sheet / breakpoint polish. */
+    /* Phase 5 polish: collapsed LeafLink tab refinement — lighter standby strip, calmer hover, clearer expand cue. */
+    .app-main.leaflink-collapsed {
+      grid-template-columns: minmax(0, 1fr) 36px;
+      gap: 0.55rem;
+    }
+
+    .leaflink-panel-shell {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+    }
+
+    .leaflink-panel-shell #leaflinkMockPanel {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .leaflink-edge-tab {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.45rem;
+      width: 36px;
+      flex-shrink: 0;
+      padding: 0.5rem 0.06rem 0.45rem;
+      margin: 0;
+      box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      background: rgba(13, 17, 23, 0.52);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      color: rgba(139, 148, 158, 0.72);
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: -1px 0 10px rgba(0, 0, 0, 0.14);
+      transition:
+        color 0.22s ease,
+        background 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease;
+    }
+
+    .leaflink-edge-tab:hover {
+      color: rgba(201, 209, 217, 0.9);
+      background: rgba(17, 24, 39, 0.75);
+      border-color: rgba(88, 166, 255, 0.14);
+      box-shadow:
+        -1px 0 14px rgba(0, 0, 0, 0.18),
+        0 0 18px rgba(88, 166, 255, 0.05);
+    }
+
+    /* Horizontal chevron at top reads clearly as “open panel toward the left”. */
+    .leaflink-edge-tab .leaflink-edge-chevron {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      font-size: 1.42rem;
+      font-weight: 300;
+      line-height: 1;
+      color: rgba(88, 166, 255, 0.38);
+      letter-spacing: -0.02em;
+      transition: color 0.22s ease, transform 0.22s ease;
+    }
+
+    .leaflink-edge-tab:hover .leaflink-edge-chevron {
+      color: rgba(121, 184, 255, 0.78);
+      transform: translateX(-1px);
+    }
+
+    .leaflink-edge-tab .leaflink-edge-label {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: 0.56rem;
+      font-weight: 500;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: inherit;
+      line-height: 1.25;
+      opacity: 0.88;
+      transition: opacity 0.22s ease;
+    }
+
+    .leaflink-edge-tab:hover .leaflink-edge-label {
+      opacity: 1;
+    }
+
+    .app-main.leaflink-collapsed .leaflink-edge-tab {
+      display: flex;
+    }
+
+    .app-main.leaflink-collapsed #leaflinkMockPanel {
+      display: none;
+    }
+
+    .leaflink-panel-collapse-btn {
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      background: rgba(88, 166, 255, 0.1);
+      color: #79b8ff;
+      cursor: pointer;
+      font-size: 1.05rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.15s ease;
+    }
+
+    .leaflink-panel-collapse-btn:hover {
+      background: rgba(88, 166, 255, 0.18);
+      border-color: rgba(88, 166, 255, 0.45);
+      color: #c8e1ff;
+    }
+
+    .leaflink-panel-collapse-btn:active {
+      transform: scale(0.96);
+    }
+
+    .leaflink-mock-header-trail {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-shrink: 0;
     }
 
     .chat-main-column {
@@ -306,6 +444,40 @@
       .app-main {
         grid-template-columns: 1fr;
         grid-auto-rows: auto;
+      }
+
+      .app-main.leaflink-collapsed {
+        grid-template-columns: 1fr;
+      }
+
+      .app-main.leaflink-collapsed .leaflink-panel-shell {
+        min-height: 48px;
+        max-height: 56px;
+      }
+
+      .app-main.leaflink-collapsed .leaflink-edge-tab {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.42rem 0.85rem;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.055);
+        border-right: 1px solid rgba(255, 255, 255, 0.055);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+      }
+
+      .app-main.leaflink-collapsed .leaflink-edge-tab .leaflink-edge-chevron {
+        width: auto;
+        font-size: 1.2rem;
+      }
+
+      .app-main.leaflink-collapsed .leaflink-edge-tab .leaflink-edge-label {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        font-size: 0.6rem;
+        letter-spacing: 0.08em;
       }
     }
 
@@ -1467,6 +1639,17 @@
       margin: 6px 0;
     }
 
+    .chat-hints .chat-hints-secondary {
+      margin: 0;
+      font-weight: 400;
+      font-size: 13px;
+      color: #8b949e;
+      line-height: 1.5;
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
     /* -------------------------------------------------------------------------
        Phase 1: Mock LeafLink Inbox UI (frontend-only).
        States: loading → active-with-items | empty (see LEAFLINK_DEMO_MODE in script).
@@ -1577,6 +1760,30 @@
     .leaflink-quickadd-row {
       display: flex;
       justify-content: flex-end;
+    }
+
+    .leaflink-quickadd-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .leaflink-clear-local {
+      font-size: 0.72rem;
+      color: #8b949e;
+      background: transparent;
+      border: none;
+      padding: 0.2rem 0.35rem;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .leaflink-clear-local:hover {
+      color: #e6edf3;
     }
 
     .leaflink-quickadd-btn {
@@ -2138,6 +2345,88 @@
       margin-bottom: 0.35rem;
     }
 
+    /* Phase 3: Memory handshake — preview panel only; no silent indexing */
+    .leaflink-memory-section {
+      margin: 0.55rem 0 0;
+      padding: 0.45rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid rgba(163, 113, 247, 0.28);
+      background: rgba(163, 113, 247, 0.06);
+    }
+
+    .leaflink-memory-section.hidden {
+      display: none;
+    }
+
+    .leaflink-memory-heading {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #d2a8ff;
+      margin-bottom: 0.35rem;
+    }
+
+    .leaflink-memory-state-line {
+      margin: 0 0 0.3rem;
+      font-size: 0.72rem;
+      color: #c9d1d9;
+      line-height: 1.4;
+    }
+
+    .leaflink-memory-distinction {
+      margin: 0 0 0.25rem;
+      font-size: 0.65rem;
+      color: #8b949e;
+      line-height: 1.45;
+    }
+
+    .leaflink-memory-pending {
+      margin-top: 0.4rem;
+      padding-top: 0.4rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .leaflink-memory-pending.hidden {
+      display: none;
+    }
+
+    .leaflink-memory-confirm-q {
+      margin: 0 0 0.25rem;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .leaflink-memory-confirm-hint {
+      margin: 0 0 0.45rem;
+      font-size: 0.65rem;
+      color: #8b949e;
+      line-height: 1.45;
+    }
+
+    .leaflink-memory-pending-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .leaflink-mock-memory-pill {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.06rem 0.28rem;
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-radius: 4px;
+      color: #d2a8ff;
+      border: 1px solid rgba(163, 113, 247, 0.45);
+      background: rgba(163, 113, 247, 0.12);
+      vertical-align: middle;
+    }
+
     .leaflink-mock-footer {
       flex-shrink: 0;
       margin: 0 -0.15rem;
@@ -2255,6 +2544,20 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .app-main {
+        transition: none;
+      }
+
+      .leaflink-edge-tab,
+      .leaflink-edge-tab .leaflink-edge-chevron,
+      .leaflink-edge-tab .leaflink-edge-label {
+        transition: none;
+      }
+
+      .leaflink-edge-tab:hover .leaflink-edge-chevron {
+        transform: none;
+      }
+
       .leaflink-mock-item.leaflink-mock-item-enter,
       .leaflink-mock-list.leaflink-list-fade-in,
       .leaflink-mock-panel.leaflink-panel-pulse,
@@ -2418,12 +2721,10 @@
             <button type="button" id="onboardingStartBtn" class="btn onboarding-start-btn">Start Chatting</button>
           </div>
           <div class="chat-hints visible" id="chatHints" aria-hidden="false">
-            <p>Ask WhisperLeaf anything</p>
-            <ul>
-              <li>Summarize a document</li>
-              <li>Help me think through a decision</li>
-              <li>Search my local knowledge</li>
-            </ul>
+            <p>A private AI workspace for thinking, not just chatting.</p>
+            <p class="chat-hints-secondary">
+              Capture ideas, work through them, and choose what becomes memory.
+            </p>
           </div>
           <div class="messages-inner" id="chatWindow"></div>
           <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>
@@ -2455,6 +2756,8 @@
       </div>
       </div>
 
+      <!-- Phase 5: Right panel collapse (LeafLink). Phase 1: mock inbox. -->
+      <div class="leaflink-panel-shell" id="leaflinkPanelShell">
       <!-- Phase 1: Mock Inbox UI — static demo data; no backend. Future backend hookup: fetch + POST actions. -->
       <aside
         id="leaflinkMockPanel"
@@ -2464,9 +2767,22 @@
         <div class="leaflink-mock-header">
           <div class="leaflink-mock-title-row">
             <h2 class="leaflink-mock-title">LeafLink Inbox</h2>
-            <span class="leaflink-mock-badge" title="Demo data only">Mock Mode</span>
+            <div class="leaflink-mock-header-trail">
+              <span class="leaflink-mock-badge" title="Demo data only">Mock Mode</span>
+              <button
+                type="button"
+                id="leaflinkCollapseBtn"
+                class="leaflink-panel-collapse-btn"
+                aria-label="Hide LeafLink"
+                title="Hide LeafLink"
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+            </div>
           </div>
-          <p class="leaflink-mock-subtitle">Items sent from your phone appear here.</p>
+          <p class="leaflink-mock-subtitle">
+            Items sent from your phone appear here. Review first — add to chat or save to memory only when you choose; no silent indexing.
+          </p>
         </div>
         <!-- Phase 1: Local ingestion bridge (paste / drop). Future: phone sync + API ingestion. -->
         <div class="leaflink-mock-quickadd" id="leaflinkQuickAdd">
@@ -2478,7 +2794,10 @@
             placeholder="Paste a note, list, or idea…"
             aria-label="Paste a note, list, or idea to add to LeafLink inbox"
           ></textarea>
-          <div class="leaflink-quickadd-row">
+          <div class="leaflink-quickadd-actions">
+            <button type="button" id="leaflinkClearLocalBtn" class="leaflink-clear-local" title="Remove saved local items from this browser">
+              Clear local inbox
+            </button>
             <button type="button" id="leaflinkQuickAddBtn" class="leaflink-quickadd-btn">
               Add to Inbox
             </button>
@@ -2497,9 +2816,40 @@
           <p id="leaflinkMockDetailBody" class="leaflink-mock-detail-body muted">
             Choose an inbox row and tap Open to preview content here. Summarize fills a placeholder summary (Phase 1).
           </p>
+          <!-- Phase 3: Memory handshake — explicit opt-in only; demo/local state. Future: wire to real memory write. -->
+          <div id="leaflinkMemorySection" class="leaflink-memory-section hidden" aria-label="Memory">
+            <span class="leaflink-memory-heading">Memory</span>
+            <p id="leaflinkMemoryStateLine" class="leaflink-memory-state-line"></p>
+            <p id="leaflinkMemoryDistinction" class="leaflink-memory-distinction"></p>
+            <div id="leaflinkMemoryPending" class="leaflink-memory-pending hidden">
+              <p class="leaflink-memory-confirm-q">Save this item to memory?</p>
+              <p class="leaflink-memory-confirm-hint">
+                Saved memory can be recalled later in relevant conversations. Nothing is indexed until you confirm.
+              </p>
+              <div class="leaflink-memory-pending-actions">
+                <button type="button" id="leaflinkMemoryConfirmBtn" class="leaflink-mock-btn leaflink-mock-btn-primary">
+                  Confirm Save
+                </button>
+                <button type="button" id="leaflinkMemoryCancelBtn" class="leaflink-mock-btn leaflink-mock-btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
           <div id="leaflinkMockDetailSummary" class="leaflink-mock-detail-summary hidden" role="status"></div>
         </div>
       </aside>
+      <button
+        type="button"
+        id="leaflinkExpandTab"
+        class="leaflink-edge-tab"
+        aria-label="Show LeafLink"
+        title="Show LeafLink"
+      >
+        <span class="leaflink-edge-chevron" aria-hidden="true">‹</span>
+        <span class="leaflink-edge-label">LeafLink</span>
+      </button>
+      </div>
     </main>
   </div>
 
@@ -2521,6 +2871,7 @@
       "use strict";
       // Phase 1: Mock Inbox UI — embedded in this template.
       // Phase 1 (continued): Local ingestion bridge — session-only items from paste / quick add / file drop. Future: API + phone sync.
+      // Phase 3: Memory handshake — explicit Save to Memory + confirm in preview; localStorage demo flags + saveLeafLinkMemoryStub (no indexer).
       // Phase 2: Intelligence Layer (frontend heuristic). Future: replace deriveLeafLinkIntelligence() with model-driven inference + API.
       // Phase 4: UI polish — transitions, primary button, insert hint, panel pulse (CSS-only; optional motion lib later).
       // Future backend hookup: merge sessionUserItemsRaw with GET /api/leaflink/inbox; keep mock samples as demo fallback.
@@ -2808,7 +3159,23 @@
         });
       }
 
-      /** Session-only user items (this tab). Cleared on full page reload. Future: persist + merge with API. */
+      function getLeafLinkItemById(id) {
+        if (!id) return null;
+        var i;
+        for (i = 0; i < sessionUserItemsRaw.length; i++) {
+          if (sessionUserItemsRaw[i].id === id) {
+            return enrichLeafLinkItem(sessionUserItemsRaw[i]);
+          }
+        }
+        for (i = 0; i < LEAFLINK_MOCK_ITEMS.length; i++) {
+          if (LEAFLINK_MOCK_ITEMS[i].id === id) {
+            return enrichLeafLinkItem(LEAFLINK_MOCK_ITEMS[i]);
+          }
+        }
+        return null;
+      }
+
+      /** User-added local items (persisted via Phase 2 localStorage when non-empty). Mock samples used as fallback when empty. */
       var sessionUserItemsRaw = [];
       var leaflinkLocalId = 0;
       var highlightNewId = null;
@@ -2863,6 +3230,176 @@
         }, 2200);
       }
 
+      // --- Phase 2: Local persistence (localStorage only; no backend) ---
+      // Future: replace localStorage with phone sync / local database / API ingestion.
+      var LEAFLINK_STORAGE_KEY = "whisperleaf_leaflink_items";
+
+      function syncLeafLinkLocalIdFromSession() {
+        var max = 0;
+        sessionUserItemsRaw.forEach(function (r) {
+          var m = /^ll-local-(\d+)$/.exec(r.id || "");
+          if (m) {
+            var n = parseInt(m[1], 10);
+            if (n > max) max = n;
+          }
+        });
+        leaflinkLocalId = max;
+      }
+
+      function loadLeafLinkLocalItems() {
+        try {
+          var raw = localStorage.getItem(LEAFLINK_STORAGE_KEY);
+          if (!raw) return;
+          var data = JSON.parse(raw);
+          if (!Array.isArray(data)) {
+            sessionUserItemsRaw = [];
+            return;
+          }
+          var cleaned = [];
+          for (var i = 0; i < data.length; i++) {
+            var o = data[i];
+            if (!o || typeof o !== "object") continue;
+            if (typeof o.id !== "string" || o.id.indexOf("ll-local-") !== 0) continue;
+            if (typeof o.content !== "string") continue;
+            var content = o.content;
+            cleaned.push({
+              id: o.id,
+              title: typeof o.title === "string" ? o.title : titleFromText(content),
+              type: typeof o.type === "string" ? o.type : "note",
+              snippet:
+                typeof o.snippet === "string" ? o.snippet : buildSnippetFromContent(content),
+              timestamp: typeof o.timestamp === "string" ? o.timestamp : formatNowTimestamp(),
+              device: typeof o.device === "string" ? o.device : "This Device",
+              unread: o.unread !== false,
+              content: content,
+            });
+          }
+          sessionUserItemsRaw = cleaned;
+          syncLeafLinkLocalIdFromSession();
+        } catch (e) {
+          sessionUserItemsRaw = [];
+          try {
+            localStorage.removeItem(LEAFLINK_STORAGE_KEY);
+          } catch (e2) {}
+        }
+      }
+
+      function saveLeafLinkLocalItems() {
+        try {
+          localStorage.setItem(LEAFLINK_STORAGE_KEY, JSON.stringify(sessionUserItemsRaw));
+        } catch (e) {
+          showIngestToast("Could not save to browser storage", true);
+        }
+      }
+
+      function clearLeafLinkLocalItems() {
+        try {
+          localStorage.removeItem(LEAFLINK_STORAGE_KEY);
+        } catch (e) {}
+        sessionUserItemsRaw = [];
+        leaflinkLocalId = 0;
+        highlightNewId = null;
+        Object.keys(summaryById).forEach(function (k) {
+          if (k.indexOf("ll-local-") === 0) delete summaryById[k];
+        });
+        stripLeafLinkMemoryHandshakeLocals();
+        renderList();
+      }
+
+      // --- Phase 3: Memory handshake (explicit opt-in; demo/local state only) ---
+      // Future: replace localStorage + stubs with real memory write path; never silent indexing.
+      var LEAFLINK_MEMORY_HANDSHAKE_KEY = "whisperleaf_leaflink_memory_handshake";
+      /** @type {Record<string, string>} */
+      var leafLinkMemoryDemoMarked = Object.create(null);
+      /** In-session only: item ids awaiting Confirm Save in the preview panel */
+      var leafLinkMemoryPending = Object.create(null);
+
+      function loadLeafLinkMemoryHandshake() {
+        try {
+          var raw = localStorage.getItem(LEAFLINK_MEMORY_HANDSHAKE_KEY);
+          if (!raw) {
+            leafLinkMemoryDemoMarked = Object.create(null);
+            return;
+          }
+          var data = JSON.parse(raw);
+          if (data && typeof data === "object" && !Array.isArray(data)) {
+            leafLinkMemoryDemoMarked = data;
+          } else {
+            leafLinkMemoryDemoMarked = Object.create(null);
+          }
+        } catch (e) {
+          leafLinkMemoryDemoMarked = Object.create(null);
+          try {
+            localStorage.removeItem(LEAFLINK_MEMORY_HANDSHAKE_KEY);
+          } catch (e2) {}
+        }
+      }
+
+      function persistLeafLinkMemoryHandshake() {
+        try {
+          localStorage.setItem(
+            LEAFLINK_MEMORY_HANDSHAKE_KEY,
+            JSON.stringify(leafLinkMemoryDemoMarked)
+          );
+        } catch (e) {
+          showIngestToast("Could not save memory handshake state", true);
+        }
+      }
+
+      function stripLeafLinkMemoryHandshakeLocals() {
+        var next = Object.create(null);
+        Object.keys(leafLinkMemoryDemoMarked).forEach(function (k) {
+          if (k.indexOf("ll-local-") !== 0) next[k] = leafLinkMemoryDemoMarked[k];
+        });
+        leafLinkMemoryDemoMarked = next;
+        persistLeafLinkMemoryHandshake();
+        Object.keys(leafLinkMemoryPending).forEach(function (k) {
+          if (k.indexOf("ll-local-") === 0) delete leafLinkMemoryPending[k];
+        });
+      }
+
+      function isLeafLinkMemoryDemoMarked(id) {
+        return !!(id && leafLinkMemoryDemoMarked[id]);
+      }
+
+      /**
+       * Phase 3: Memory handshake — persist explicit user approval (demo flag only).
+       * Future: replace with real memory write path (embedding + durable store).
+       */
+      function markLeafLinkItemForMemory(item) {
+        if (!item || !item.id) return;
+        leafLinkMemoryDemoMarked[item.id] = "demo";
+        persistLeafLinkMemoryHandshake();
+      }
+
+      /**
+       * Phase 3: Stub — no backend or memory indexer call.
+       * Future: replace with saveLeafLinkMemory / API ingestion hook.
+       */
+      function saveLeafLinkMemoryStub(item) {
+        if (typeof console !== "undefined" && console.debug) {
+          console.debug("[LeafLink Phase3] saveLeafLinkMemoryStub (no-op)", item && item.id);
+        }
+      }
+
+      /** Mark ll-local-* rows read when preview opens; persists unread if tracking changes. */
+      function markLocalItemReadIfNeeded(id) {
+        if (!id || id.indexOf("ll-local-") !== 0) return;
+        for (var i = 0; i < sessionUserItemsRaw.length; i++) {
+          if (sessionUserItemsRaw[i].id === id && sessionUserItemsRaw[i].unread) {
+            sessionUserItemsRaw[i].unread = false;
+            saveLeafLinkLocalItems();
+            var row = listEl.querySelector('.leaflink-mock-item[data-id="' + id + '"]');
+            if (row) {
+              row.classList.remove("unread");
+              var dot = row.querySelector(".leaflink-mock-unread-dot");
+              if (dot) dot.remove();
+            }
+            break;
+          }
+        }
+      }
+
       /**
        * Phase 1: Local ingestion bridge — create item + prepend to session list.
        * Future: POST /api/leaflink/inbox then append server id.
@@ -2890,6 +3427,9 @@
         highlightNewId = id;
         showIngestToast("Added to LeafLink");
         renderList();
+        saveLeafLinkLocalItems();
+        var listScroll = document.getElementById("leaflinkListScroll");
+        if (listScroll) listScroll.scrollTop = 0;
         return raw;
       }
 
@@ -2980,11 +3520,47 @@
         }
       }
 
+      function hideLeafLinkMemorySection() {
+        var sec = document.getElementById("leaflinkMemorySection");
+        var pend = document.getElementById("leaflinkMemoryPending");
+        if (sec) sec.classList.add("hidden");
+        if (pend) pend.classList.add("hidden");
+      }
+
+      /** Phase 3: Memory handshake UI in preview (state + optional confirm/cancel). */
+      function renderLeafLinkMemoryPanel(item) {
+        var sec = document.getElementById("leaflinkMemorySection");
+        var stateLine = document.getElementById("leaflinkMemoryStateLine");
+        var distinction = document.getElementById("leaflinkMemoryDistinction");
+        var pend = document.getElementById("leaflinkMemoryPending");
+        if (!sec || !stateLine || !distinction || !pend) return;
+
+        sec.classList.remove("hidden");
+        distinction.textContent =
+          "Review first. Add to chat and save to memory are separate — use either, both, or neither. Nothing is indexed without your explicit confirm.";
+
+        var marked = isLeafLinkMemoryDemoMarked(item.id);
+        var pending = !!leafLinkMemoryPending[item.id];
+
+        if (marked) {
+          stateLine.textContent =
+            "Saved to memory (demo) — not yet connected to semantic recall in WhisperLeaf.";
+          pend.classList.add("hidden");
+        } else if (pending) {
+          stateLine.textContent = "Awaiting your confirmation below.";
+          pend.classList.remove("hidden");
+        } else {
+          stateLine.textContent = "Not saved to memory.";
+          pend.classList.add("hidden");
+        }
+      }
+
       function renderDetail(item) {
         hideDetailExtras();
         var detailRoot = document.getElementById("leaflinkMockDetail");
         if (!item) {
           lastDetailItemId = null;
+          hideLeafLinkMemorySection();
           if (detailRoot) detailRoot.classList.remove("leaflink-detail-swap");
           detailTitle.textContent = "Select an item";
           detailBody.textContent =
@@ -3000,6 +3576,7 @@
           detailRoot.classList.add("leaflink-detail-swap");
         }
         lastDetailItemId = item.id;
+        markLocalItemReadIfNeeded(item.id);
         var intel = item._intel || deriveLeafLinkIntelligence(item);
         detailTitle.textContent = item.title;
         if (detailMeta) {
@@ -3039,6 +3616,7 @@
           detailSummary.classList.add("hidden");
           detailSummary.innerHTML = "";
         }
+        renderLeafLinkMemoryPanel(item);
       }
 
       function buildRenderRows() {
@@ -3127,7 +3705,15 @@
 
           var title = document.createElement("div");
           title.className = "leaflink-mock-item-title";
-          title.textContent = item.title;
+          title.appendChild(document.createTextNode(item.title));
+          if (isLeafLinkMemoryDemoMarked(item.id)) {
+            var memPill = document.createElement("span");
+            memPill.className = "leaflink-mock-memory-pill";
+            memPill.textContent = "Memory";
+            memPill.setAttribute("title", "Marked for memory (demo — not semantic yet)");
+            title.appendChild(document.createTextNode(" "));
+            title.appendChild(memPill);
+          }
 
           var snippet = document.createElement("p");
           snippet.className = "leaflink-mock-item-snippet";
@@ -3186,6 +3772,18 @@
               renderDetail(item);
             }, "secondary")
           );
+          actions.appendChild(
+            mkBtn("Save to Memory", function () {
+              setSelected(item.id);
+              if (isLeafLinkMemoryDemoMarked(item.id)) {
+                showIngestToast("Already marked for memory (demo)", false);
+                renderDetail(item);
+                return;
+              }
+              leafLinkMemoryPending[item.id] = true;
+              renderDetail(item);
+            }, "secondary")
+          );
           var addBtn = mkBtn(
             "Add to Chat",
             function () {
@@ -3226,6 +3824,26 @@
 
       var quickInput = document.getElementById("leaflinkQuickInput");
       var quickBtn = document.getElementById("leaflinkQuickAddBtn");
+      var clearLocalBtn = document.getElementById("leaflinkClearLocalBtn");
+      if (clearLocalBtn) {
+        clearLocalBtn.addEventListener("click", function () {
+          if (sessionUserItemsRaw.length === 0) {
+            showIngestToast("No local items to clear", false);
+            return;
+          }
+          if (
+            !confirm(
+              "Clear all LeafLink items saved on this device? This cannot be undone."
+            )
+          ) {
+            return;
+          }
+          clearLeafLinkLocalItems();
+          renderDetail(null);
+          setSelected("");
+          showIngestToast("Local LeafLink items cleared");
+        });
+      }
       if (quickBtn && quickInput) {
         quickBtn.addEventListener("click", function () {
           addSessionItemFromText(quickInput.value);
@@ -3286,7 +3904,70 @@
         });
       }
 
+      (function wireLeafLinkMemoryHandshakeButtons() {
+        var confirmBtn = document.getElementById("leaflinkMemoryConfirmBtn");
+        var cancelBtn = document.getElementById("leaflinkMemoryCancelBtn");
+        if (confirmBtn) {
+          confirmBtn.addEventListener("click", function () {
+            var id = lastDetailItemId;
+            if (!id || !leafLinkMemoryPending[id]) return;
+            var item = getLeafLinkItemById(id);
+            if (!item) return;
+            delete leafLinkMemoryPending[id];
+            markLeafLinkItemForMemory(item);
+            saveLeafLinkMemoryStub(item);
+            showIngestToast(
+              "Marked for future memory (demo — semantic recall not connected yet)",
+              false
+            );
+            renderDetail(item);
+            renderList();
+          });
+        }
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", function () {
+            var id = lastDetailItemId;
+            if (!id) return;
+            delete leafLinkMemoryPending[id];
+            var item = getLeafLinkItemById(id);
+            if (item) renderDetail(item);
+            else hideLeafLinkMemorySection();
+          });
+        }
+      })();
+
+      loadLeafLinkLocalItems();
+      loadLeafLinkMemoryHandshake();
       renderList();
+    })();
+  </script>
+  <script>
+    // Phase 5: Right panel collapse — directional toggle (not sidebar pattern).
+    // Persist: whisperleaf_leaflink_panel_collapsed. Future: mobile sheet / swipe if needed.
+    (function () {
+      "use strict";
+      var KEY = "whisperleaf_leaflink_panel_collapsed";
+      var main = document.querySelector(".app-main");
+      var collapseBtn = document.getElementById("leaflinkCollapseBtn");
+      var expandTab = document.getElementById("leaflinkExpandTab");
+      if (!main || !collapseBtn || !expandTab) return;
+      function setCollapsed(collapsed) {
+        main.classList.toggle("leaflink-collapsed", collapsed);
+        try {
+          localStorage.setItem(KEY, collapsed ? "1" : "0");
+        } catch (e) {}
+      }
+      collapseBtn.addEventListener("click", function () {
+        setCollapsed(true);
+      });
+      expandTab.addEventListener("click", function () {
+        setCollapsed(false);
+      });
+      try {
+        if (localStorage.getItem(KEY) === "1") {
+          setCollapsed(true);
+        }
+      } catch (e) {}
     })();
   </script>
 </body>

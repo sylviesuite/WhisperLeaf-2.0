@@ -2,6 +2,11 @@
  * WhisperLeaf Chat — front-end controller.
  * Single source of truth: state.messages. All rendering derives from it.
  */
+
+// Phase 3: Memory handshake (local demo) — whisperleaf_saved_memories in localStorage.
+// Future: replace with real memory system / server persistence.
+const WL_LOCAL_SAVED_MEMORIES_KEY = 'whisperleaf_saved_memories';
+
 const ChatController = {
   state: {
     isSending: false,
@@ -182,21 +187,94 @@ const ChatController = {
     }
   },
 
+  /** First line of text, trimmed, optional max length with ellipsis. */
+  _firstContentLine(text, maxLen) {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const line = raw.split(/\r?\n/)[0].trim();
+    if (maxLen && line.length > maxLen) return line.slice(0, maxLen - 1) + '\u2026';
+    return line;
+  },
+
+  loadLocalDemoSavedMemories() {
+    try {
+      const raw = localStorage.getItem(WL_LOCAL_SAVED_MEMORIES_KEY);
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data)) return [];
+      return data
+        .filter((e) => e && typeof e.id === 'string' && typeof e.content === 'string')
+        .map((e) => ({
+          id: e.id,
+          title: typeof e.title === 'string' ? e.title : '',
+          content: e.content,
+          timestamp: typeof e.timestamp === 'string' ? e.timestamp : '',
+          _source: 'local_demo',
+        }));
+    } catch (_) {
+      return [];
+    }
+  },
+
+  persistLocalDemoSavedMemories(entries) {
+    try {
+      localStorage.setItem(WL_LOCAL_SAVED_MEMORIES_KEY, JSON.stringify(entries));
+    } catch (_) {}
+  },
+
+  /** Dedupes by id. Phase 3: LeafLink confirm path calls this; future: real memory write. */
+  upsertLocalDemoSavedMemory(entry) {
+    const id = entry && entry.id;
+    if (!id) return;
+    const rawList = this.loadLocalDemoSavedMemories().map((e) => {
+      const { _source, ...rest } = e;
+      return rest;
+    });
+    const next = rawList.filter((e) => e.id !== id);
+    next.push({
+      id,
+      title: typeof entry.title === 'string' ? entry.title : '',
+      content: typeof entry.content === 'string' ? entry.content : '',
+      timestamp: entry.timestamp || new Date().toISOString(),
+    });
+    this.persistLocalDemoSavedMemories(next);
+  },
+
+  removeLocalDemoSavedMemory(memoryId) {
+    const sid = String(memoryId);
+    const rawList = this.loadLocalDemoSavedMemories().map((e) => {
+      const { _source, ...rest } = e;
+      return rest;
+    });
+    const next = rawList.filter((e) => e.id !== sid);
+    this.persistLocalDemoSavedMemories(next);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('wl-leaflink-local-memory-removed', { detail: { id: sid } })
+      );
+    } catch (_) {}
+  },
+
   async loadSavedMemories() {
     const list = this.els.savedMemoriesList;
     const empty = this.els.savedMemoriesEmpty;
     if (!list) return;
+    let serverMemories = [];
     try {
       const res = await fetch('/api/memories?limit=200');
-      if (!res.ok) return;
-      const data = await res.json();
-      const memories = data.memories || [];
-      this.renderSavedMemoriesList(memories);
-      if (empty) {
-        empty.classList.toggle('hidden', memories.length > 0);
+      if (res.ok) {
+        const data = await res.json();
+        serverMemories = (data.memories || []).map((m) => ({
+          ...m,
+          _source: 'server',
+        }));
       }
-    } catch (_) {
-      if (empty) empty.classList.remove('hidden');
+    } catch (_) {}
+    const localMemories = this.loadLocalDemoSavedMemories();
+    const merged = serverMemories.concat(localMemories);
+    this.renderSavedMemoriesList(merged);
+    if (empty) {
+      empty.classList.toggle('hidden', merged.length > 0);
     }
   },
 
@@ -208,24 +286,59 @@ const ChatController = {
     (memories || []).forEach((m) => {
       const li = document.createElement('li');
       li.className = 'saved-memory-item';
-      const text = document.createElement('span');
-      text.className = 'saved-memory-text';
+      const wrap = document.createElement('div');
+      wrap.className = 'saved-memory-text';
       const content = (m.content || '').trim() || '(empty)';
-      text.textContent = content.length > maxPreview ? content.slice(0, maxPreview) + '\u2026' : content;
+      const isLocal = m._source === 'local_demo';
+      const titleText = isLocal
+        ? (String(m.title || '').trim() || this._firstContentLine(content, 80) || '(Untitled)')
+        : this._firstContentLine(content, 100) || '(empty)';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'saved-memory-title';
+      titleEl.textContent = titleText;
+      wrap.appendChild(titleEl);
+      const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      let previewLine = '';
+      if (isLocal) {
+        previewLine = this._firstContentLine(content, maxPreview);
+        if (previewLine === titleText && lines.length > 1) {
+          previewLine = this._firstContentLine(lines.slice(1).join(' '), maxPreview);
+        }
+      } else if (lines.length > 1) {
+        previewLine = this._firstContentLine(lines.slice(1).join(' · '), maxPreview);
+      }
+      if (previewLine) {
+        const previewEl = document.createElement('div');
+        previewEl.className = 'saved-memory-preview-line';
+        previewEl.textContent = previewLine;
+        wrap.appendChild(previewEl);
+      }
+      if (isLocal) {
+        const badge = document.createElement('small');
+        badge.className = 'saved-memory-demo-badge';
+        badge.textContent = 'Local demo — not semantic memory';
+        wrap.appendChild(badge);
+      }
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn-delete-memory';
       btn.textContent = 'Delete';
       btn.setAttribute('aria-label', 'Delete this memory');
       btn.dataset.memoryId = String(m.id);
-      btn.addEventListener('click', () => this.deleteMemory(m.id));
-      li.appendChild(text);
+      const source = m._source || 'server';
+      btn.addEventListener('click', () => this.deleteMemory(m.id, source));
+      li.appendChild(wrap);
       li.appendChild(btn);
       list.appendChild(li);
     });
   },
 
-  async deleteMemory(memoryId) {
+  async deleteMemory(memoryId, source) {
+    if (source === 'local_demo') {
+      this.removeLocalDemoSavedMemory(memoryId);
+      await this.loadSavedMemories();
+      return;
+    }
     try {
       const res = await fetch('/api/memory/' + encodeURIComponent(memoryId), { method: 'DELETE' });
       if (!res.ok) return;
@@ -1195,37 +1308,14 @@ const ChatController = {
   updateChatHintsContent() {
     const hints = this.els.chatHints;
     if (!hints) return;
-    const docs = this.state.documents || [];
-    const names = docs.map((d) => (d.title || d.filename || d.id || '').trim()).filter(Boolean);
-    const first = names[0];
-    const second = names[1];
-    const p = document.createElement('p');
-    p.textContent = 'Ask WhisperLeaf anything';
-    const ul = document.createElement('ul');
-    if (names.length > 0) {
-      const li1 = document.createElement('li');
-      li1.textContent = 'Ask about your uploaded documents';
-      ul.appendChild(li1);
-      if (first) {
-        const li2 = document.createElement('li');
-        li2.textContent = 'Summarize ' + first;
-        ul.appendChild(li2);
-      }
-      if (second) {
-        const li3 = document.createElement('li');
-        li3.textContent = "What's in " + second + '?';
-        ul.appendChild(li3);
-      }
-    } else {
-      ['Summarize a document', 'Help me think through a decision', 'Search my local knowledge'].forEach((text) => {
-        const li = document.createElement('li');
-        li.textContent = text;
-        ul.appendChild(li);
-      });
-    }
+    const p1 = document.createElement('p');
+    p1.textContent = 'A private AI workspace for thinking, not just chatting.';
+    const p2 = document.createElement('p');
+    p2.className = 'chat-hints-secondary';
+    p2.textContent = 'Capture ideas, work through them, and choose what becomes memory.';
     hints.innerHTML = '';
-    hints.appendChild(p);
-    hints.appendChild(ul);
+    hints.appendChild(p1);
+    hints.appendChild(p2);
   },
 
   scrollToMessageAnchor(messageId) {

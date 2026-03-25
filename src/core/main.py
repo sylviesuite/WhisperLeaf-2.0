@@ -60,7 +60,8 @@ from .mode_router import (
     parse_mode_override,
 )
 from .insight_box import build_mode_guidance
-from .capture_mode import build_capture_mode_guidance, is_leaflink_originated_message
+from .capture_mode import is_leaflink_originated_message
+from .dual_mode import build_dual_mode_guidance, select_response_shape_mode
 from .memory import (
     init_memory_db,
     save_memory,
@@ -1609,10 +1610,28 @@ async def chat_endpoint(payload: ChatRequest):
         # Guidance must never break chat request handling.
         pass
 
-    # Capture Mode: Applied to LeafLink-originated content (matches UI paste markers).
-    # Future: expand with explicit channel flag / classification from the client.
-    if _leaflink_capture_message:
-        mode_guidance = (mode_guidance + "\n\n" + build_capture_mode_guidance()).strip()
+    # Dual Mode System: Structure vs Reflect (prompt shaping only).
+    # LeafLink → structure (reuses Capture Mode v2 via build_dual_mode_guidance).
+    # Document context → reflect by default; "summarize"/"bullet" etc. → structure;
+    # "explain"/"reflect"/"interpret" → reflect. Skipped for execution/creative posture.
+    # Future: Builder Mode, Research Mode, or explicit client `response_shape`.
+    _has_document_context = bool(doc_block and doc_block.strip())
+    _response_shape_mode = None
+    if user_mode not in ("execution", "creative"):
+        _response_shape_mode = select_response_shape_mode(
+            message_for_model,
+            is_leaflink=_leaflink_capture_message,
+            has_document_context=_has_document_context,
+        )
+    if _response_shape_mode:
+        mode_guidance = (
+            mode_guidance
+            + "\n\n"
+            + build_dual_mode_guidance(
+                _response_shape_mode,
+                {"leaflink": _leaflink_capture_message},
+            )
+        ).strip()
 
     user_facing_privacy_guidance = ""
     if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):

@@ -36,23 +36,31 @@ def build_capture_mode_guidance() -> str:
     """
     Instruction block appended to mode_guidance for LeafLink-originated turns.
 
-    Capture Mode: Applied to LeafLink-originated content.
+    Capture Mode: Applied to LeafLink-originated content only (see main.py).
     """
+    # Capture Mode v2: Strict concise output enforcement (prompt-only; no post-processing).
+    # Future: may pair with max_tokens, response_format / JSON schema, or a second pass for compression.
     return (
-        "Capture Mode (LeafLink handoff): The user message includes content sent from LeafLink "
-        "(phone capture pasted into chat). Use this style for your reply.\n\n"
-        "**Priority for this turn:** Capture Mode overrides conflicting instructions above "
-        "(e.g. conversational 'mental model' or teaching tone; do not force a full engineering spec "
-        "unless the pasted content is clearly code or build work — otherwise organize and improve the capture).\n\n"
-        "Tone: Concise, practical, grounded. No philosophical framing, no 'mental model' language, "
-        "no coaching or teaching voice unless the user explicitly asks to learn.\n\n"
-        "Structure: Prefer bullet points or short grouped sections. Organize the captured material "
-        "when it helps (e.g. categorize a grocery list, clean formatting, extract action items). "
-        "Avoid long paragraphs.\n\n"
-        "Behavior: Default to improving, organizing, or extracting value from the captured content. "
-        "Do not over-expand, speculate, or add long explanations unless the user asks.\n\n"
-        "Close: Optionally end with at most one short, concrete offer — e.g. "
-        "'Want me to turn this into a checklist?' or 'Want quantities or categories adjusted?' "
-        "Only if it fits; omit if redundant.\n\n"
-        "Avoid in Capture Mode: abstract reasoning, teaching tone, unnecessary elaboration, and filler."
+        "Capture Mode v2 (LeafLink handoff): The pasted message is a capture from LeafLink. "
+        "Respond like a **tool** (direct output), not a coach or consultant. "
+        "**This turn only** — ignore conflicting guidance above about long explanations, teaching tone, or exploratory depth.\n\n"
+        "**Length & shape:** Target **4–8 short lines** total in most cases (or the same density as tight bullets). "
+        "Use grouped bullets or 2–3 very short sections. **No long paragraphs**; break dense text into lists or labels.\n\n"
+        "**Banned phrasing (do not use):** "
+        "\"This ensures\", \"This means\", \"At a practical level\", \"Here's a breakdown\", "
+        "\"In summary\", \"It's worth noting\", or similar meta-explanation. "
+        "Do not narrate what you are doing — **show the result**.\n\n"
+        "**Default structure:** "
+        "(1) Optional one-line title or label only if useful. "
+        "(2) **Structured output first** — organized / reformatted / extracted content (e.g. categorized grocery list, "
+        "cleaned list, idea → short bullets). "
+        "(3) At most **one** optional closing line: a single short assist question "
+        "(e.g. \"Want this as a checklist?\", \"Want this saved or expanded?\") — omit if redundant.\n\n"
+        "**Verbosity guard:** If a draft would exceed roughly **100–120 words**, **rewrite shorter** before sending: "
+        "remove explanation and coaching; keep only actionable, structured output plus at most one optional question.\n\n"
+        "**Vocabulary:** Prefer *organize, reformat, extract, clean, summarize, categorize, list*. "
+        "Avoid abstract nouns like *mental model*, *framework*, *approach* unless the user's text already uses them.\n\n"
+        "**Transformation priority:** Always **do** the organize / reformat / extract in the reply itself. "
+        "Do **not** explain what could be done instead of doing it.\n\n"
+        "**Still avoid:** speculative essays, abstract reasoning, filler, and multiple follow-up questions."
     )
