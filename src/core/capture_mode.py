@@ -46,6 +46,8 @@ def build_capture_mode_guidance() -> str:
         "**This turn only** — ignore conflicting guidance above about long explanations, teaching tone, or exploratory depth.\n\n"
         "**Length & shape:** Target **4–8 short lines** total in most cases (or the same density as tight bullets). "
         "Use grouped bullets or 2–3 very short sections. **No long paragraphs**; break dense text into lists or labels.\n\n"
+        "**Opening:** The first line must already be useful output or a tight label—never reflective setup "
+        "(e.g. \"One pattern…\", \"At a practical level…\").\n\n"
         "**Banned phrasing (do not use):** "
         "\"This ensures\", \"This means\", \"At a practical level\", \"Here's a breakdown\", "
         "\"In summary\", \"It's worth noting\", or similar meta-explanation. "

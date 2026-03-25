@@ -134,6 +134,15 @@
       max-width: 480px;
     }
 
+    .hero-trust-anchor {
+      font-size: 0.92rem;
+      color: #c9d1d9;
+      margin: -0.85rem 0 1.25rem 0;
+      max-width: 480px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
     .hero-ctas {
       display: flex;
       flex-wrap: wrap;
@@ -332,6 +341,16 @@
       font-size: 0.9rem;
       color: #8b949e;
       max-width: 640px;
+    }
+
+    .safety-framework-lead {
+      margin: 0 0 0.55rem 0;
+    }
+
+    .safety-key-statement {
+      margin-top: 0.75rem;
+      font-weight: 500;
+      color: #c9d1d9;
     }
 
     /* How it works */
@@ -581,6 +600,7 @@
         <p class="hero-subtitle">
           A private AI workspace that runs entirely on your device—no cloud, no tracking, no compromises.
         </p>
+        <p class="hero-trust-anchor">Private by default. Safe by design.</p>
         <div class="hero-ctas">
           <a href="/app" class="btn btn-primary">Enter App</a>
           <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
@@ -692,6 +712,38 @@
           </ul>
         </div>
       </div>
+    </section>
+
+    <!-- SAFETY & PRIVACY -->
+    <section class="section" aria-labelledby="safety-privacy-title">
+      <h2 id="safety-privacy-title">Safety &amp; Privacy</h2>
+      <p class="section-body">Private by default. Safe by design.</p>
+      <p class="section-body">
+        All processing happens locally on your device. Your data is not sent to external servers, and nothing is stored or used without your explicit control.
+      </p>
+      <p class="section-body">
+        Memory is fully user-controlled. Content is only saved when you choose, and context is isolated to prevent unintended carryover between conversations.
+      </p>
+      <p class="section-body">
+        This approach reduces common risks associated with cloud-based AI systems, including data leakage, unintended retention, and cross-context contamination.
+      </p>
+      <p class="section-body safety-framework-lead">
+        WhisperLeaf is designed in alignment with established safety and risk management principles, including:
+      </p>
+      <ul class="transparency-list">
+        <li>OWASP Top 10 for LLM Applications</li>
+        <li>NIST AI Risk Management Framework (AI RMF)</li>
+        <li>GDPR and privacy-by-design standards</li>
+      </ul>
+      <p class="section-body">
+        While WhisperLeaf is not a compliance-certified system, its local-first architecture and explicit memory controls make it well-suited for privacy-sensitive workflows.
+      </p>
+      <p class="section-body">
+        Unlike cloud-based AI tools, WhisperLeaf keeps your data on your device and under your control at all times.
+      </p>
+      <p class="section-body safety-key-statement">
+        There are no external calls, no background indexing, and no hidden memory.
+      </p>
     </section>
 
     <!-- Future Direction -->

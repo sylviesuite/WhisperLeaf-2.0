@@ -61,7 +61,9 @@ from .mode_router import (
 )
 from .insight_box import build_mode_guidance
 from .capture_mode import is_leaflink_originated_message
-from .dual_mode import build_dual_mode_guidance, select_response_shape_mode
+from .confidence_layer import build_confidence_guidance, select_confidence_level
+from .depth_escalation import build_depth_escalation_guidance, select_depth_escalation_level
+from .dual_mode import build_dual_mode_guidance, hits_explanation_intent, select_response_shape_mode
 from .memory import (
     init_memory_db,
     save_memory,
@@ -138,6 +140,20 @@ except FileNotFoundError:
         "Never expose internal file paths, modules, or implementation details unless the user explicitly "
         "asks about WhisperLeaf's codebase or system design."
     )
+
+# Per-turn reinforcement of prompts/system.md Voice Specification (tone, phrasing, safety style).
+# Capture / LeafLink / dual-mode structure rules still override shape and brevity when active for that turn.
+WHISPERLEAF_VOICE_SPEC_LAYER = (
+    "WhisperLeaf voice (full spec in system prompt — Voice Specification): calm, grounded, conversational—not corporate. "
+    "Practical-first; suggest rather than command (“you can try” vs “you should”); no fluff or stiff AI voice. "
+    "For real-world how-to / health / tools / “what should I do”: start the **first sentence** with usable guidance—no abstract opening (“At a practical level…”, “One pattern…”). "
+    "Prefer “Main thing is…”, “Start with…”, “You can try…”; short bullets for options; ~4–6 short lines or 3–5 sentences unless another mode says otherwise. "
+    "Accuracy: common mainstream options only; if uncertain, stay general—don’t guess fringe specifics. "
+    "Preferred tone examples: “I’d start with…”, “Main thing is…”, “If it gets worse…”, “If it hangs around a few days…”. "
+    "Avoid: “Please note that…”, “It is important to…”, “consult a healthcare professional”, “it is essential…” as filler. "
+    "Safety: one calm natural line when relevant; no repetitive warnings. "
+    "If Capture Mode / LeafLink / Structure Mode shapes this turn, follow that shape but keep this tone."
+)
 
 
 def is_explicit_codebase_query(message: str) -> bool:
@@ -1174,6 +1190,9 @@ async def chat_endpoint(payload: ChatRequest):
         % (response_mode.value, mode_source, explain_mode_choice(message_for_model)),
     )
 
+    # LeafLink paste (early: explanation follow-up rules + dual-mode / Capture Mode below).
+    _leaflink_capture_message = is_leaflink_originated_message(message_for_model)
+
     # Hard ban list for fabricated internal mechanism language.
     # This is instruction-only (prompt guidance), not a behavior rewrite.
     banned_internal_phrases = (
@@ -1214,26 +1233,88 @@ async def chat_endpoint(payload: ChatRequest):
 
     insight_guidance = ""
     # Response style guardrails (localized per-request guidance).
-    # Keep identity rules in prompts/system.md unchanged.
+    # Identity + WhisperLeaf Voice Specification: prompts/system.md; per-turn reinforcement below.
     previous_assistant_turns = sum(1 for m in (payload.history or []) if getattr(m, "role", None) == "assistant")
     wants_follow_up_question = (previous_assistant_turns % 2) == 1
-    is_first_assistant_reply = previous_assistant_turns == 0
-    follow_up_guidance_line = (
-        "End with either no follow-up or an optional offer to go deeper (no question)."
-        if depth_intent == "low"
-        else (
+    depth_level = select_depth_escalation_level(
+        message_for_model,
+        topic_reset_detected=topic_reset_detected,
+        previous_assistant_turns=previous_assistant_turns,
+        response_mode=response_mode,
+        leaflink=_leaflink_capture_message,
+    )
+    if depth_level is not None:
+        depth_guidance = (
+            depth_guidance + "\n\n" + build_depth_escalation_guidance(depth_level)
+        ).strip()
+    confidence_level = select_confidence_level(
+        message_for_model,
+        has_honesty_guidance=bool(honesty_guidance),
+        is_simple_query=detect_simple_query(message_for_model),
+        response_mode=response_mode,
+        leaflink=_leaflink_capture_message,
+    )
+    if confidence_level is not None:
+        depth_guidance = (
+            depth_guidance + "\n\n" + build_confidence_guidance(confidence_level)
+        ).strip()
+    _explanation_follow_turn = (
+        hits_explanation_intent(message_for_model)
+        and not _leaflink_capture_message
+        and response_mode not in (ResponseMode.TASK_DEV, ResponseMode.CREATIVE)
+    )
+    if _explanation_follow_turn:
+        if depth_level is not None and depth_level >= 2:
+            follow_up_guidance_line = (
+                "Explanation thread: **Depth escalation Level %d** applies—**do not** invite the user to go deeper; "
+                "they already signaled curiosity or requested depth."
+                % depth_level
+            )
+        elif depth_level == 1:
+            follow_up_guidance_line = (
+                "Explanation thread: follow **Depth escalation (Level 1)**—**at most one** short optional invitation to go deeper; "
+                "low-pressure, no stacked options or multiple questions."
+            )
+        elif depth_intent == "low":
+            follow_up_guidance_line = (
+                "This is an explanation-style question: give a **short, clear, plain-language** answer first—"
+                "**clarity over completeness**; do not front-load detail or sound like a textbook unless asked. "
+                "You may end with **at most one** short, optional, low-pressure invitation to go deeper "
+                "(e.g. \"I can go deeper into how it works if you want.\" / \"I can break down the parts one by one if that's useful.\" "
+                "/ \"I can go deeper into the science or keep it plain-language.\")—or omit if it feels redundant. "
+                "Do **not** stack multiple follow-ups or questions."
+            )
+        elif depth_intent == "high":
+            follow_up_guidance_line = (
+                "This is an explanation-style question: still open with a **compact gist**, then give the depth the user asked for. "
+                "Optionally add **at most one** short invitation if more detail might still help—never multiple stacked prompts."
+            )
+        else:
+            follow_up_guidance_line = (
+                "This is an explanation-style question: start **simple and grounded**; avoid dumping everything upfront. "
+                "After the main answer, you may add **at most one** short optional line inviting depth—calm and natural, not a script. "
+                "Do not stack follow-ups."
+            )
+    elif depth_intent == "low":
+        follow_up_guidance_line = (
+            "End with either no follow-up or an optional offer to go deeper (no question)."
+        )
+    else:
+        follow_up_guidance_line = (
             "End with exactly ONE optional follow-up question."
             if wants_follow_up_question
             else "End with a statement (no question)."
         )
-    )
     response_style_guidance = (
-        "Response style: keep the reply grounded and slightly thoughtful. "
-        "Be concise (3–5 sentences for the first reply; otherwise avoid long paragraphs unless the user asks for depth). "
-        "Avoid generic buzzwords/lists; when the user is discussing a domain, prefer 1–2 concrete, mechanism-level details over vague categories. "
+        WHISPERLEAF_VOICE_SPEC_LAYER
+        + "\n\n"
+        "Response structure: put the practical answer in the first sentence when the user wants steps, tools, health choices, or “what should I do”—no essay lead-in. "
+        "Use short bullets for multiple options; keep explanations brief and action-tied. "
+        "Avoid generic buzzwords and filler; when the user is discussing a domain, prefer 1–2 concrete, mechanism-level details over vague categories. "
         "Follow-up behavior: do not always end with a question. "
         + follow_up_guidance_line
         + " "
+        "Use the optional-depth pattern **mainly** for explanation / information questions—not when the user needs urgent practical steps first. "
         "Do not use salesy enthusiasm. "
         "If pivot-specific guidance is present, follow that guidance for phrasing/follow-ups."
     )
@@ -1535,9 +1616,7 @@ async def chat_endpoint(payload: ChatRequest):
             out.pop()
         return "\n".join(out).strip()
 
-    # LeafLink paste detection (shared for insight gating + Capture Mode guidance below).
-    # Future: replace marker check with client metadata (e.g. JSON source field) or classifier.
-    _leaflink_capture_message = is_leaflink_originated_message(message_for_model)
+    # LeafLink: detected earlier for follow-up rules; same flag for insight gating + Capture Mode below.
 
     if not _leaflink_capture_message and detect_insight_opportunity(message_for_model):
         # Selective insight injection: one sentence, high-signal; off for task-dev and creative modes.
@@ -1612,8 +1691,9 @@ async def chat_endpoint(payload: ChatRequest):
 
     # Dual Mode System: Structure vs Reflect (prompt shaping only).
     # LeafLink → structure (reuses Capture Mode v2 via build_dual_mode_guidance).
-    # Document context → reflect by default; "summarize"/"bullet" etc. → structure;
-    # "explain"/"reflect"/"interpret" → reflect. Skipped for execution/creative posture.
+    # Practical / health / tools / “what should I do” → structure (dual_mode._hits_practical_action_first).
+    # Document context → reflect by default unless structure forced by keywords or practical triggers.
+    # Skipped for execution/creative posture.
     # Future: Builder Mode, Research Mode, or explicit client `response_shape`.
     _has_document_context = bool(doc_block and doc_block.strip())
     _response_shape_mode = None
