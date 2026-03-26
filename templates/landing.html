@@ -122,25 +122,29 @@
     }
 
     .hero-title {
-      font-size: clamp(2rem, 4vw, 2.6rem);
-      line-height: 1.15;
-      margin: 0 0 0.75rem 0;
+      font-size: clamp(1.85rem, 3.6vw, 2.45rem);
+      line-height: 1.18;
+      margin: 0 0 0.85rem 0;
+      max-width: 22em;
+      letter-spacing: -0.02em;
     }
 
     .hero-subtitle {
       font-size: 0.98rem;
       color: #8b949e;
-      margin: 0 0 1.5rem 0;
+      margin: 0 0 0.85rem 0;
       max-width: 480px;
+      line-height: 1.55;
     }
 
     .hero-trust-anchor {
       font-size: 0.92rem;
       color: #c9d1d9;
-      margin: -0.85rem 0 1.25rem 0;
+      margin: 0 0 1.35rem 0;
       max-width: 480px;
       font-weight: 500;
       letter-spacing: 0.01em;
+      line-height: 1.45;
     }
 
     .hero-ctas {
@@ -341,16 +345,27 @@
       font-size: 0.9rem;
       color: #8b949e;
       max-width: 640px;
+      line-height: 1.55;
     }
 
-    .safety-framework-lead {
-      margin: 0 0 0.55rem 0;
+    .section .section-body + .section-body {
+      margin-top: 0.65rem;
+    }
+
+    .safety-tagline {
+      font-size: 0.95rem;
+      color: #c9d1d9;
+      font-weight: 500;
+      margin: 0 0 0.85rem 0;
+      max-width: 640px;
     }
 
     .safety-key-statement {
-      margin-top: 0.75rem;
+      margin-top: 1rem;
       font-weight: 500;
       color: #c9d1d9;
+      font-size: 0.92rem;
+      line-height: 1.45;
     }
 
     /* How it works */
@@ -377,6 +392,15 @@
       margin: 0;
       font-size: 0.86rem;
       color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .how-transition {
+      margin: 1.35rem 0 0;
+      font-size: 0.88rem;
+      color: #6e7681;
+      line-height: 1.55;
+      max-width: 640px;
     }
 
     .how-card .pillar-list {
@@ -595,12 +619,12 @@
     <!-- HERO -->
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-left">
-        <p class="hero-kicker">Your AI. Your Device. Your Data.</p>
-        <h1 id="hero-title" class="hero-title">WhisperLeaf</h1>
+        <p class="hero-kicker">YOUR AI. YOUR DEVICE. YOUR DATA.</p>
+        <h1 id="hero-title" class="hero-title">Think freely. Your AI stays with you.</h1>
         <p class="hero-subtitle">
-          A private AI workspace that runs entirely on your device—no cloud, no tracking, no compromises.
+          WhisperLeaf is a private AI workspace that runs entirely on your device — no cloud, no tracking, no compromises.
         </p>
-        <p class="hero-trust-anchor">Private by default. Safe by design.</p>
+        <p class="hero-trust-anchor">Built for AI sovereignty — your thoughts never leave your machine.</p>
         <div class="hero-ctas">
           <a href="/app" class="btn btn-primary">Enter App</a>
           <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
@@ -661,32 +685,41 @@
       <h2 id="how-title">How it works</h2>
       <div class="how-grid">
         <article class="how-card">
-          <h3>Download</h3>
-          <p>Install WhisperLeaf on your computer. No account or signup flow required.</p>
+          <h3>Bring your work in</h3>
+          <p>
+            Drop in a document, paste a note, or start with a private question. WhisperLeaf gives you a local workspace for thinking, writing, and analysis.
+          </p>
         </article>
         <article class="how-card">
-          <h3>Setup</h3>
-          <p>Choose a local model, point WhisperLeaf at your documents, and confirm your preferences.</p>
+          <h3>Process locally</h3>
+          <p>
+            WhisperLeaf runs on your device, so your content stays with you while the model reads, summarizes, and helps you work through ideas.
+          </p>
         </article>
         <article class="how-card">
-          <h3>Use</h3>
-          <p>Chat, summarize, and explore ideas in a calm workspace that never sends your writing away.</p>
+          <h3>Choose what stays</h3>
+          <p>
+            Save useful context only when you want to. Memory is explicit, reviewable, and under your control.
+          </p>
         </article>
       </div>
+      <p class="how-transition">
+        A private workflow from input to insight — without sending your work to the cloud.
+      </p>
     </section>
 
     <!-- TRANSPARENCY -->
     <section class="section" aria-labelledby="transparency-title">
-      <h2 id="transparency-title">See what your AI is doing</h2>
+      <h2 id="transparency-title">See what WhisperLeaf is doing</h2>
       <p class="section-lead">
-        WhisperLeaf makes local processing visible. You can see when it’s working, which documents it’s using, and what stays on-device.
+        WhisperLeaf makes local processing visible, so you can understand how your work is handled and verify that it stays on your machine.
       </p>
       <ul class="transparency-list">
-        <li>Understand when and how WhisperLeaf is using your content.</li>
-        <li>Verify that no ordinary workflows send data to remote servers.</li>
-        <li>Review benchmarks that come from your own machine.</li>
+        <li>See when WhisperLeaf is working with local files</li>
+        <li>Review what gets saved to memory</li>
+        <li>Confirm that ordinary workflows do not send data outward</li>
       </ul>
-      <a href="/transparency" class="link-cta">View Transparency</a>
+      <a href="/transparency" class="link-cta">Review Transparency</a>
     </section>
 
     <!-- COMPARISON -->
@@ -697,8 +730,8 @@
           <h3>Cloud AI</h3>
           <ul>
             <li>Runs on remote servers</li>
-            <li>Requires login and account</li>
-            <li>Data may be stored or logged</li>
+            <li>Usually requires an account</li>
+            <li>May store or log activity</li>
             <li>Often tied to subscriptions</li>
           </ul>
         </div>
@@ -706,9 +739,9 @@
           <h3>WhisperLeaf</h3>
           <ul>
             <li>Runs on your own device</li>
-            <li>No account needed</li>
-            <li>Your documents stay local</li>
-            <li>Designed for local ownership</li>
+            <li>No account required</li>
+            <li>Your work stays local</li>
+            <li>Designed for personal control</li>
           </ul>
         </div>
       </div>
@@ -717,32 +750,18 @@
     <!-- SAFETY & PRIVACY -->
     <section class="section" aria-labelledby="safety-privacy-title">
       <h2 id="safety-privacy-title">Safety &amp; Privacy</h2>
-      <p class="section-body">Private by default. Safe by design.</p>
+      <p class="safety-tagline">Private by default. Safe by design.</p>
       <p class="section-body">
-        All processing happens locally on your device. Your data is not sent to external servers, and nothing is stored or used without your explicit control.
+        WhisperLeaf processes your work locally on your device. Your data is not sent to external servers during normal use, and nothing is stored unless you choose it.
       </p>
       <p class="section-body">
-        Memory is fully user-controlled. Content is only saved when you choose, and context is isolated to prevent unintended carryover between conversations.
+        Memory is user-controlled. Saved context should be explicit, reviewable, and isolated to reduce unintended carryover between conversations.
       </p>
       <p class="section-body">
-        This approach reduces common risks associated with cloud-based AI systems, including data leakage, unintended retention, and cross-context contamination.
-      </p>
-      <p class="section-body safety-framework-lead">
-        WhisperLeaf is designed in alignment with established safety and risk management principles, including:
-      </p>
-      <ul class="transparency-list">
-        <li>OWASP Top 10 for LLM Applications</li>
-        <li>NIST AI Risk Management Framework (AI RMF)</li>
-        <li>GDPR and privacy-by-design standards</li>
-      </ul>
-      <p class="section-body">
-        While WhisperLeaf is not a compliance-certified system, its local-first architecture and explicit memory controls make it well-suited for privacy-sensitive workflows.
-      </p>
-      <p class="section-body">
-        Unlike cloud-based AI tools, WhisperLeaf keeps your data on your device and under your control at all times.
+        WhisperLeaf is designed around local-first, privacy-respecting principles for people working with sensitive ideas, drafts, and documents.
       </p>
       <p class="section-body safety-key-statement">
-        There are no external calls, no background indexing, and no hidden memory.
+        No external calls. No background indexing. No hidden memory.
       </p>
     </section>
 
@@ -761,7 +780,7 @@
     <section class="section final-cta" aria-labelledby="final-title">
       <h2 id="final-title">Take back control of your AI.</h2>
       <p class="section-lead">
-        Keep your ideas, documents, and research where they belong—on your own machine.
+        Keep your ideas, documents, and research where they belong — on your own machine.
       </p>
       <div class="final-cta-actions">
         <a href="/app" class="btn btn-primary">Enter App</a>
