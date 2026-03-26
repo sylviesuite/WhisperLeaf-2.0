@@ -766,6 +766,10 @@
       .thinking-step {
         transition: none;
       }
+      .streaming-cursor {
+        animation: none;
+        opacity: 0.6;
+      }
     }
 
     .message p {
@@ -794,18 +798,47 @@
 
     .message.error {
       align-self: flex-start;
-      background: rgba(248, 81, 73, 0.15);
-      border: 1px solid rgba(248, 81, 73, 0.35);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .message-error-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .message-error-title {
+      color: #e6edf3;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .message-error-body {
+      color: #c9d1d9;
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .message-error-helper {
+      color: #8b949e;
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    @keyframes whisper-cursor {
+      0% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0.4; }
     }
 
     .streaming-cursor {
       display: inline-block;
       margin-left: 2px;
-      animation: blink 1s steps(1) infinite;
-    }
-
-    @keyframes blink {
-      50% { opacity: 0; }
+      width: 0.62em;
+      text-align: left;
+      opacity: 0.6;
+      animation: whisper-cursor 1.2s ease-in-out infinite;
     }
 
     .input-row {
@@ -1200,6 +1233,33 @@
       transition: opacity 0.14s ease;
     }
 
+    .local-processing-status {
+      display: none;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.42rem 1.25rem 0.2rem;
+      font-size: 0.74rem;
+      color: #8b949e;
+      letter-spacing: 0.01em;
+    }
+
+    .local-processing-status.visible {
+      display: inline-flex;
+    }
+
+    .local-processing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(63, 185, 80, 0.85);
+      animation: local-processing-pulse 1.25s ease-in-out infinite;
+    }
+
+    @keyframes local-processing-pulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+
     .thinking-step:empty {
       display: none;
     }
@@ -1285,6 +1345,9 @@
 
     @media (prefers-reduced-motion: reduce) {
       .model-status-indicator.checking .model-status-dot {
+        animation: none;
+      }
+      .local-processing-dot {
         animation: none;
       }
     }
@@ -2749,6 +2812,10 @@
           <button type="button" id="modelRetryBtn" class="btn btn-primary btn-small model-unavailable-retry">
             Retry Connection
           </button>
+        </div>
+        <div id="localProcessingStatus" class="local-processing-status" aria-live="polite" aria-atomic="true">
+          <span class="local-processing-dot" aria-hidden="true"></span>
+          <span>Local AI active</span>
         </div>
         <div id="thinkingStep" class="thinking-step" aria-live="polite" aria-atomic="true"></div>
         <div id="memorySavedNotification" class="memory-saved-notification hidden" role="status" aria-live="polite">

@@ -854,6 +854,37 @@ async def _build_docs_context(query: str, limit: int = 5):
     Returns (block_str, source_names, excerpts) for context, citation, and preview.
     excerpts: list of {"name": title, "snippet": text} per chunk (for UI preview).
     """
+    def _tokenize(text: str) -> List[str]:
+        # Lightweight lexical gate to avoid attaching unrelated document snippets.
+        return re.findall(r"[a-z0-9]{3,}", (text or "").lower())
+
+    stop = {
+        "the", "and", "for", "with", "that", "this", "from", "into", "about",
+        "your", "you", "are", "was", "were", "have", "has", "had", "what",
+        "when", "where", "which", "would", "could", "should", "there", "their",
+        "them", "then", "than", "just", "also", "how", "why",
+    }
+
+    query_tokens = [t for t in _tokenize(query or "") if t not in stop]
+    query_set = set(query_tokens)
+
+    def _doc_relevance(item: Dict[str, Any]) -> float:
+        # Prefer vector score if available; fallback to token overlap.
+        raw_score = item.get("score")
+        if isinstance(raw_score, (int, float)):
+            return float(raw_score)
+        snippet = (item.get("snippet") or item.get("content") or "").strip()
+        s_tokens = set(t for t in _tokenize(snippet) if t not in stop)
+        if not query_set or not s_tokens:
+            return 0.0
+        overlap = len(query_set & s_tokens)
+        # Normalize by query length to avoid rewarding long snippets.
+        return overlap / max(1, len(query_set))
+
+    # If docs.search provides a similarity score, this threshold expects a moderately relevant match.
+    # For lexical fallback overlap, this roughly means >= 1/3 overlap on short queries.
+    RELEVANCE_THRESHOLD = 0.34
+
     result = await tool_bus.execute(
         "docs.search",
         {"query": (query or "").strip(), "top_k": limit},
@@ -868,16 +899,28 @@ async def _build_docs_context(query: str, limit: int = 5):
     seen = set()
     source_names: List[str] = []
     excerpts: List[Dict[str, str]] = []
+    kept_count = 0
+    dropped_count = 0
     for r in items:
+        rel = _doc_relevance(r)
+        if rel < RELEVANCE_THRESHOLD:
+            dropped_count += 1
+            continue
         title = (r.get("title") or r.get("path") or "Document").strip()
         if title and title not in seen:
             seen.add(title)
             source_names.append(title)
         snippet = (r.get("snippet") or r.get("content") or "").strip()
         if snippet:
+            kept_count += 1
             lines.append("%s: %s" % (title, snippet[:400] + ("..." if len(snippet) > 400 else "")))
             # Store full snippet for preview (cap length for payload)
             excerpts.append({"name": title, "snippet": snippet[:1200] + ("..." if len(snippet) > 1200 else "")})
+    if kept_count or dropped_count:
+        print(
+            "[WhisperLeaf][docs-relevance] query=%r kept=%s dropped=%s threshold=%.2f"
+            % ((query or "")[:80], kept_count, dropped_count, RELEVANCE_THRESHOLD)
+        )
     if not lines:
         return ("", [], [])
     block = "RELEVANT DOCUMENTS:\n" + "\n".join("- " + line for line in lines)

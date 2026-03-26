@@ -26,6 +26,7 @@ const ChatController = {
     documents: [],
     documentSearchQuery: '',
     forceShowOnboarding: false,
+    stageTimers: [],
   },
 
   els: {},
@@ -60,6 +61,7 @@ const ChatController = {
     this.els.chatHints = document.getElementById('chatHints');
     this.els.starterPrompts = document.getElementById('starterPrompts');
     this.els.starterDocNudge = document.getElementById('starterDocNudge');
+    this.els.localProcessingStatus = document.getElementById('localProcessingStatus');
     this.els.modelUnavailableBanner = document.getElementById('modelUnavailableBanner');
     this.els.modelRetryBtn = document.getElementById('modelRetryBtn');
     this.els.mindMemoryBtn = document.getElementById('mindMemoryBtn');
@@ -862,6 +864,34 @@ const ChatController = {
 
   STREAM_WATCHDOG_MS: 120000,
   STREAM_HARD_TIMEOUT_MS: 360000,
+  STAGE_2_MS: 3000,
+  STAGE_3_MS: 8000,
+
+  startGenerationFeedback() {
+    this.stopGenerationFeedback();
+    this.startThinking();
+    this.setThinkingStep('Thinking locally...');
+    if (this.els.localProcessingStatus) this.els.localProcessingStatus.classList.add('visible');
+    this.state.stageTimers = [
+      setTimeout(() => {
+        if (!this.state.isSending) return;
+        this.setThinkingStep('Working through this on your device...');
+      }, this.STAGE_2_MS),
+      setTimeout(() => {
+        if (!this.state.isSending) return;
+        this.setThinkingStep('Local models can take a little longer, especially on first run.');
+      }, this.STAGE_3_MS),
+    ];
+  },
+
+  stopGenerationFeedback() {
+    this.stopThinking();
+    this.clearThinkingStep();
+    if (this.els.localProcessingStatus) this.els.localProcessingStatus.classList.remove('visible');
+    const timers = this.state.stageTimers || [];
+    timers.forEach((t) => clearTimeout(t));
+    this.state.stageTimers = [];
+  },
 
   startWatchdog() {
     this.stopWatchdog();
@@ -876,9 +906,8 @@ const ChatController = {
       // Escalate to a hard timeout if nothing arrives for much longer.
       this.state.streamWatchdog = setTimeout(() => {
         console.warn('[WhisperLeaf] Stream watchdog hard timeout');
-        this.stopThinking();
-        this.clearThinkingStep();
-        this.setStreamingBubbleError('Response timed out. If this keeps happening, check that the local model is running and loaded.');
+        this.stopGenerationFeedback();
+        this.setStreamingBubbleError('timeout');
         this.setSendingState(false);
       }, this.STREAM_HARD_TIMEOUT_MS - this.STREAM_WATCHDOG_MS);
     }, this.STREAM_WATCHDOG_MS);
@@ -995,7 +1024,21 @@ const ChatController = {
     if (msg.role === 'user') {
       div.textContent = msg.content || '';
     } else if (msg.status === 'error') {
-      div.textContent = msg.content || 'Error';
+      const wrap = document.createElement('div');
+      wrap.className = 'message-error-wrap';
+      const title = document.createElement('div');
+      title.className = 'message-error-title';
+      title.textContent = 'Couldn’t finish this response';
+      const body = document.createElement('div');
+      body.className = 'message-error-body';
+      body.textContent = 'WhisperLeaf wasn’t able to complete the reply on this attempt. Please try again.';
+      const helper = document.createElement('div');
+      helper.className = 'message-error-helper';
+      helper.textContent = 'If this keeps happening, the local model may still be starting up.';
+      wrap.appendChild(title);
+      wrap.appendChild(body);
+      wrap.appendChild(helper);
+      div.appendChild(wrap);
     } else if (msg.status === 'streaming') {
       const textSpan = document.createElement('span');
       textSpan.className = 'streaming-text';
@@ -1236,7 +1279,22 @@ const ChatController = {
     }
     if (bubble) {
       bubble.className = 'message error';
-      bubble.textContent = message || 'Error';
+      bubble.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.className = 'message-error-wrap';
+      const title = document.createElement('div');
+      title.className = 'message-error-title';
+      title.textContent = 'Couldn’t finish this response';
+      const body = document.createElement('div');
+      body.className = 'message-error-body';
+      body.textContent = 'WhisperLeaf wasn’t able to complete the reply on this attempt. Please try again.';
+      const helper = document.createElement('div');
+      helper.className = 'message-error-helper';
+      helper.textContent = 'If this keeps happening, the local model may still be starting up.';
+      wrap.appendChild(title);
+      wrap.appendChild(body);
+      wrap.appendChild(helper);
+      bubble.appendChild(wrap);
     }
     this.state.currentStreamingId = null;
     this.scrollToBottomIfNearBottom();
@@ -1472,7 +1530,6 @@ const ChatController = {
             const sid = this.state.currentStreamingId;
             if (sid) this.updateMessage(sid, { content: fullReply });
             this.updateStreamingBubble(fullReply);
-            this.clearThinkingStep();
           }
         } else if (event === 'status') {
           if (isActiveStream()) {
@@ -1527,8 +1584,7 @@ const ChatController = {
         } else if (event === 'done') {
           if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] SSE done, reply_len=', fullReply.length);
           this.stopWatchdog();
-          this.stopThinking();
-          this.clearThinkingStep();
+          this.stopGenerationFeedback();
           if (isActiveStream()) {
             if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf debug] final frontend text before render (first 120):', JSON.stringify((fullReply || '').slice(0, 120)));
             if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
@@ -1540,8 +1596,7 @@ const ChatController = {
         } else if (event === 'error') {
           if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] SSE error:', (data || '').trim() || 'Error');
           this.stopWatchdog();
-          this.stopThinking();
-          this.clearThinkingStep();
+          this.stopGenerationFeedback();
           if (isActiveStream()) {
             this.setStreamingBubbleError((data || '').trim() || 'Error');
           } else {
@@ -1566,12 +1621,10 @@ const ChatController = {
             const sid = this.state.currentStreamingId;
             if (sid) this.updateMessage(sid, { content: fullReply });
             this.updateStreamingBubble(fullReply);
-            this.clearThinkingStep();
           }
         } else if (event === 'done') {
           this.stopWatchdog();
-          this.stopThinking();
-          this.clearThinkingStep();
+          this.stopGenerationFeedback();
           if (isActiveStream()) {
             if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
             else this.finalizeStreamingBubble();
@@ -1579,8 +1632,7 @@ const ChatController = {
           return;
         } else if (event === 'error') {
           this.stopWatchdog();
-          this.stopThinking();
-          this.clearThinkingStep();
+          this.stopGenerationFeedback();
           if (isActiveStream()) {
             this.setStreamingBubbleError((data || '').trim() || 'Error');
           }
@@ -1591,8 +1643,7 @@ const ChatController = {
 
     if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] stream reader done (no done event), reply_len=', fullReply.length);
     this.stopWatchdog();
-    this.stopThinking();
-    this.clearThinkingStep();
+    this.stopGenerationFeedback();
     if (isActiveStream()) {
       if (!fullReply.trim()) this.setStreamingBubbleError('No response from model. Check that Ollama is running and the model is loaded.');
       else this.finalizeStreamingBubble();
@@ -1641,15 +1692,13 @@ const ChatController = {
 
     this.scrollToBottom(this.els.chatMessages);
     this.updateScrollButtonVisibility();
-    this.startThinking();
-    this.setThinkingStep('Thinking\u2026');
+    this.startGenerationFeedback();
     this.startWatchdog();
 
     const abortController = new AbortController();
     const onAbort = () => {
       this.stopWatchdog();
-      this.stopThinking();
-      this.clearThinkingStep();
+      this.stopGenerationFeedback();
       this.setStreamingBubbleError('Request cancelled.');
       this.setSendingState(false);
     };
@@ -1676,8 +1725,7 @@ const ChatController = {
 
       if (!res.ok) {
         this.stopWatchdog();
-        this.stopThinking();
-        this.clearThinkingStep();
+        this.stopGenerationFeedback();
         const err = await res.json().catch(() => ({}));
         let msg = err.detail;
         if (Array.isArray(msg)) msg = (msg[0] && msg[0].msg) ? msg[0].msg : 'Request failed';
@@ -1689,8 +1737,7 @@ const ChatController = {
 
       if (!res.body) {
         this.stopWatchdog();
-        this.stopThinking();
-        this.clearThinkingStep();
+        this.stopGenerationFeedback();
         this.setStreamingBubbleError('No response body');
         return;
       }
@@ -1702,13 +1749,12 @@ const ChatController = {
         return;
       }
       this.stopWatchdog();
-      this.stopThinking();
-      this.clearThinkingStep();
+      this.stopGenerationFeedback();
       this.setStreamingBubbleError('Network error: ' + (e && e.message ? e.message : 'Unknown error'));
     } finally {
       window.removeEventListener('beforeunload', abort);
       window.removeEventListener('pagehide', abort);
-      this.clearThinkingStep();
+      if (!this.state.currentStreamingId) this.stopGenerationFeedback();
       this.setSendingState(false);
     }
   },
