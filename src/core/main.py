@@ -1964,22 +1964,34 @@ async def chat_endpoint(payload: ChatRequest):
                     return
 
                 chunk_count = 0
+                # Emit a status event before we call the local model so the client can show
+                # a warmup indicator even if the first token takes a while.
+                try:
+                    yield _sse_message(
+                        "status",
+                        json.dumps(
+                            {
+                                "step": "model_start",
+                                "model": model_client.model_name,
+                                "endpoint": model_client.base_url,
+                            }
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Stream chunks to the client as they arrive.
+                # Note: we still apply internal-leak rewriting to the final stored reply when needed,
+                # but we do not buffer the entire response before emitting any content (avoids long silence/timeouts).
+                async for chunk in model_client.chat_stream(effective_system, messages):
+                    full_reply += chunk
+                    chunk_count += 1
+                    if chunk_count == 1:
+                        print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
+                    yield _sse_message("chunk", chunk)
                 if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
-                    async for chunk in model_client.chat_stream(effective_system, messages):
-                        full_reply += chunk
-                        chunk_count += 1
-                        if chunk_count == 1:
-                            print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
                     if response_contains_internal_leak(full_reply):
+                        print("[WhisperLeaf chat] internal leak detected; rewriting stored reply")
                         full_reply = await rewrite_reply_without_internals(model_client, full_reply)
-                    yield _sse_message("chunk", full_reply)
-                else:
-                    async for chunk in model_client.chat_stream(effective_system, messages):
-                        full_reply += chunk
-                        chunk_count += 1
-                        if chunk_count == 1:
-                            print("[WhisperLeaf chat] first chunk received len=%s" % len(chunk))
-                        yield _sse_message("chunk", chunk)
                 print("[WhisperLeaf chat] stream done chunks=%s reply_len=%s" % (chunk_count, len(full_reply)))
                 if full_reply:
                     print("[WhisperLeaf debug] assembled backend reply (first 120 chars): %r" % full_reply[:120])

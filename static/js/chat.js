@@ -6,6 +6,7 @@
 // Phase 3: Memory handshake (local demo) — whisperleaf_saved_memories in localStorage.
 // Future: replace with real memory system / server persistence.
 const WL_LOCAL_SAVED_MEMORIES_KEY = 'whisperleaf_saved_memories';
+const WL_STARTED_CHAT_SESSION_KEY = 'whisperleaf_started_chat';
 
 const ChatController = {
   state: {
@@ -15,6 +16,8 @@ const ChatController = {
     messages: [],
     currentStreamingId: null,
     streamWatchdog: null,
+    streamWatchdogStage: 0,
+    lastSseEventAt: 0,
     currentStreamId: null,
     modelAvailable: true,
     lastMemorySnippets: [],
@@ -55,6 +58,8 @@ const ChatController = {
     this.els.sidebarHistoryList = document.getElementById('sidebarHistoryList');
     this.els.thinkingStep = document.getElementById('thinkingStep');
     this.els.chatHints = document.getElementById('chatHints');
+    this.els.starterPrompts = document.getElementById('starterPrompts');
+    this.els.starterDocNudge = document.getElementById('starterDocNudge');
     this.els.modelUnavailableBanner = document.getElementById('modelUnavailableBanner');
     this.els.modelRetryBtn = document.getElementById('modelRetryBtn');
     this.els.mindMemoryBtn = document.getElementById('mindMemoryBtn');
@@ -94,6 +99,7 @@ const ChatController = {
     const collapsed = sessionStorage.getItem('wlSidebarCollapsed') === 'true';
     this.setSidebarCollapsed(collapsed);
     this.state.modelStatus = 'unknown';
+    this.state.hasStartedChat = sessionStorage.getItem(WL_STARTED_CHAT_SESSION_KEY) === 'true';
   },
 
   async loadModelStatus() {
@@ -673,6 +679,17 @@ const ChatController = {
 
     const onboardingStartBtn = this.els.onboardingStartBtn;
     if (onboardingStartBtn) onboardingStartBtn.addEventListener('click', () => this.dismissOnboarding());
+    const starterPrompts = this.els.starterPrompts;
+    if (starterPrompts) {
+      starterPrompts.addEventListener('click', (e) => {
+        const btn = e.target.closest('.starter-prompt-btn');
+        if (!btn) return;
+        const prompt = (btn.getAttribute('data-prompt') || '').trim();
+        if (!prompt) return;
+        this.applyStarterPrompt(prompt, false);
+      });
+    }
+
     const onboardingHelpBtn = this.els.onboardingHelpBtn;
     if (onboardingHelpBtn) onboardingHelpBtn.addEventListener('click', () => this.reopenOnboarding());
 
@@ -826,16 +843,44 @@ const ChatController = {
   },
 
   // --- Watchdog (total time from send until stream done/error; local models can be slow on first run)
+  applyStarterPrompt(prompt, autoSend) {
+    const input = this.els.messageInput;
+    if (!input) return;
+    input.value = prompt;
+    this.autoResizeInput();
+    input.focus();
+    if (autoSend) this.sendMessage();
+  },
+
+  markChatStarted() {
+    if (this.state.hasStartedChat) return;
+    this.state.hasStartedChat = true;
+    try {
+      sessionStorage.setItem(WL_STARTED_CHAT_SESSION_KEY, 'true');
+    } catch (_) {}
+  },
+
   STREAM_WATCHDOG_MS: 120000,
+  STREAM_HARD_TIMEOUT_MS: 360000,
 
   startWatchdog() {
     this.stopWatchdog();
+    this.state.streamWatchdogStage = 0;
+    this.state.lastSseEventAt = Date.now();
     this.state.streamWatchdog = setTimeout(() => {
-      console.warn('[WhisperLeaf] Stream watchdog triggered');
-      this.stopThinking();
-      this.clearThinkingStep();
-      this.setStreamingBubbleError('Response timed out. Local models can take longer on first run — try again in a moment.');
-      this.setSendingState(false);
+      // Important: do NOT convert the streaming bubble to an error here.
+      // If the local model starts streaming after a slow warmup, we still want to render it.
+      console.warn('[WhisperLeaf] Stream watchdog soft timeout (no SSE yet)');
+      this.state.streamWatchdogStage = 1;
+      this.setThinkingStep('Still working… first run can take a bit.');
+      // Escalate to a hard timeout if nothing arrives for much longer.
+      this.state.streamWatchdog = setTimeout(() => {
+        console.warn('[WhisperLeaf] Stream watchdog hard timeout');
+        this.stopThinking();
+        this.clearThinkingStep();
+        this.setStreamingBubbleError('Response timed out. If this keeps happening, check that the local model is running and loaded.');
+        this.setSendingState(false);
+      }, this.STREAM_HARD_TIMEOUT_MS - this.STREAM_WATCHDOG_MS);
     }, this.STREAM_WATCHDOG_MS);
   },
 
@@ -844,6 +889,7 @@ const ChatController = {
       clearTimeout(this.state.streamWatchdog);
       this.state.streamWatchdog = null;
     }
+    this.state.streamWatchdogStage = 0;
   },
 
   // --- Copy button (assistant messages only)
@@ -1259,12 +1305,7 @@ const ChatController = {
     const hints = this.els.chatHints;
     const chatWindow = this.els.chatWindow;
     if (!onboarding || !hints || !chatWindow) return;
-    const hasMessages = chatWindow.querySelectorAll('.message').length > 0;
-    let seen = false;
-    try {
-      seen = localStorage.getItem(this.ONBOARDING_KEY) === 'true';
-    } catch (_) {}
-    const show = this.state.forceShowOnboarding || (!seen && !hasMessages);
+    const show = this.state.forceShowOnboarding;
     if (show) {
       onboarding.classList.remove('hidden');
       hints.classList.remove('visible');
@@ -1301,21 +1342,19 @@ const ChatController = {
     const hasMessages = chatWindow.querySelectorAll('.message').length > 0;
     this.updateOnboardingVisibility();
     const onboardingVisible = this.els.onboardingScreen && !this.els.onboardingScreen.classList.contains('hidden');
-    hints.classList.toggle('visible', !onboardingVisible && !hasMessages);
-    hints.setAttribute('aria-hidden', onboardingVisible || hasMessages ? 'true' : 'false');
+    const showStarter = !onboardingVisible && !hasMessages && !this.state.hasStartedChat;
+    hints.classList.toggle('visible', showStarter);
+    hints.setAttribute('aria-hidden', showStarter ? 'false' : 'true');
   },
 
   updateChatHintsContent() {
     const hints = this.els.chatHints;
     if (!hints) return;
-    const p1 = document.createElement('p');
-    p1.textContent = 'A private AI workspace for thinking, not just chatting.';
-    const p2 = document.createElement('p');
-    p2.className = 'chat-hints-secondary';
-    p2.textContent = 'Capture ideas, work through them, and choose what becomes memory.';
-    hints.innerHTML = '';
-    hints.appendChild(p1);
-    hints.appendChild(p2);
+    const nudge = this.els.starterDocNudge;
+    if (nudge) {
+      const hasDocs = Array.isArray(this.state.documents) && this.state.documents.length > 0;
+      nudge.classList.toggle('hidden', !hasDocs);
+    }
   },
 
   scrollToMessageAnchor(messageId) {
@@ -1340,6 +1379,7 @@ const ChatController = {
       const data = await res.json();
       const list = data.history || [];
       if (list.length === 0) return;
+      this.markChatStarted();
       this.state.messages = list
         .filter((m) => m.role)
         .map((m) => ({
@@ -1415,6 +1455,7 @@ const ChatController = {
         const parsed = this.parseSSEBlock(block);
         if (parsed === null) continue;
         const { event, data } = parsed;
+        this.state.lastSseEventAt = Date.now();
 
         if (event === 'chunk' && data !== undefined) {
           fullReply += data;
@@ -1442,6 +1483,10 @@ const ChatController = {
               if (step === 'memory_search') {
                 const short = String(query).trim().slice(0, 40);
                 this.setThinkingStep(short ? `Searching memory: ${short}${short.length >= 40 ? '\u2026' : ''}` : 'Searching memory\u2026');
+              } else if (step === 'model_start') {
+                this.setThinkingStep('Warming up local model\u2026');
+              } else if (typeof step === 'string' && step.trim()) {
+                this.setThinkingStep(step.trim());
               }
             } catch (_) {}
           }
@@ -1564,6 +1609,7 @@ const ChatController = {
       this.setSendingState(false);
       return;
     }
+    this.markChatStarted();
     const streamId = crypto.randomUUID();
     this.state.currentStreamId = streamId;
     this.els.messageInput.value = '';

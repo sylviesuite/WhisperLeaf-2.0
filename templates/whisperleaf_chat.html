@@ -1612,45 +1612,94 @@
     .chat-hints {
       display: none;
       opacity: 0;
-      text-align: center;
-      margin-top: 40px;
-      font-size: 14px;
-      color: #8b949e;
-      padding: 0 1rem;
-      transition: opacity 0.3s ease;
+      transform: translateY(4px);
+      margin: 32px auto 0;
+      max-width: 560px;
+      width: calc(100% - 2rem);
+      transition: opacity 0.24s ease, transform 0.24s ease;
     }
 
     .chat-hints.visible {
       display: block;
       opacity: 1;
+      transform: translateY(0);
     }
 
-    .chat-hints p {
-      margin: 0 0 12px 0;
-      font-weight: 500;
-      color: #e6edf3; /* brighter main line */
+    .starter-panel {
+      background: rgba(17, 24, 39, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1.1rem 1rem 1rem;
+      text-align: center;
     }
 
-    .chat-hints ul {
-      list-style: none;
-      padding: 0;
+    .starter-title {
       margin: 0;
-      color: #8b949e; /* slightly dimmer secondary lines */
+      font-size: 1rem;
+      color: #e6edf3;
+      font-weight: 600;
+      line-height: 1.4;
     }
 
-    .chat-hints li {
-      margin: 6px 0;
-    }
-
-    .chat-hints .chat-hints-secondary {
-      margin: 0;
-      font-weight: 400;
-      font-size: 13px;
+    .starter-subtext {
+      margin: 0.5rem auto 0;
+      max-width: 35rem;
+      font-size: 0.85rem;
       color: #8b949e;
       line-height: 1.5;
-      max-width: 22rem;
-      margin-left: auto;
-      margin-right: auto;
+    }
+
+    .starter-prompts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+      margin-top: 0.9rem;
+    }
+
+    .starter-prompt-btn {
+      text-align: left;
+      padding: 0.58rem 0.7rem;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(13, 17, 23, 0.72);
+      color: #c9d1d9;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.08s ease;
+    }
+
+    .starter-prompt-btn:hover {
+      background: rgba(56, 139, 253, 0.12);
+      border-color: rgba(88, 166, 255, 0.45);
+    }
+
+    .starter-prompt-btn:active {
+      transform: translateY(1px);
+    }
+
+    .starter-trust {
+      margin-top: 0.85rem;
+      font-size: 0.76rem;
+      color: #8b949e;
+      letter-spacing: 0.01em;
+    }
+
+    .starter-doc-nudge {
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      color: #8b949e;
+      line-height: 1.45;
+    }
+
+    .starter-doc-nudge.hidden {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .starter-prompts {
+        grid-template-columns: 1fr;
+      }
     }
 
     /* -------------------------------------------------------------------------
@@ -2724,10 +2773,18 @@
             <button type="button" id="onboardingStartBtn" class="btn onboarding-start-btn">Start Chatting</button>
           </div>
           <div class="chat-hints visible" id="chatHints" aria-hidden="false">
-            <p>A private AI workspace for thinking, not just chatting.</p>
-            <p class="chat-hints-secondary">
-              Capture ideas, work through them, and choose what becomes memory.
-            </p>
+            <div class="starter-panel" id="starterPanel">
+              <h2 class="starter-title">A private AI workspace for thinking, not just chatting.</h2>
+              <p class="starter-subtext">Ask a question, drop in a document, or paste a note. Everything stays on your device.</p>
+              <div class="starter-prompts" id="starterPrompts">
+                <button type="button" class="starter-prompt-btn" data-prompt="Summarize this note and highlight key ideas">Summarize this note and highlight key ideas</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="Help me think through an idea step by step">Help me think through an idea step by step</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="Turn this into a clear plan">Turn this into a clear plan</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="Explain a concept simply">Explain a concept simply</button>
+              </div>
+              <p class="starter-trust">Local • Offline • No tracking</p>
+              <p id="starterDocNudge" class="starter-doc-nudge hidden">You can also ask questions about your local documents.</p>
+            </div>
           </div>
           <div class="messages-inner" id="chatWindow"></div>
           <button type="button" class="btn-jump-bottom hidden" id="jumpBottomBtn" aria-label="Jump to latest">Jump to latest</button>

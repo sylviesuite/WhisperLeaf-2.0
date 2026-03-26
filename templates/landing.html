@@ -403,6 +403,113 @@
       max-width: 640px;
     }
 
+    .guided-demo-flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .guided-step {
+      background: rgba(17, 24, 39, 0.75);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 1.1rem 1.2rem;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.2s ease;
+    }
+
+    .guided-step.is-active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .guided-step h3 {
+      margin: 0 0 0.45rem 0;
+      font-size: 1rem;
+    }
+
+    .guided-step p {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.86rem;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .guided-visual {
+      background: rgba(13, 17, 23, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 0.72rem 0.8rem;
+      font-size: 0.84rem;
+      color: #c9d1d9;
+      line-height: 1.45;
+    }
+
+    .guided-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(63, 185, 80, 0.6);
+      background: rgba(46, 160, 67, 0.12);
+      color: #8ddb98;
+      margin-bottom: 0.42rem;
+    }
+
+    .guided-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3fb950;
+      box-shadow: 0 0 0 rgba(63, 185, 80, 0.45);
+      animation: guidedPulse 1.25s ease-in-out infinite;
+    }
+
+    @keyframes guidedPulse {
+      0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.45); }
+      70% { box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+    }
+
+    .guided-response {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .guided-response-answer {
+      color: #c9d1d9;
+      font-size: 0.83rem;
+      line-height: 1.45;
+    }
+
+    .guided-response-meta {
+      font-size: 0.76rem;
+      color: #8b949e;
+    }
+
+    .guided-save {
+      margin-top: 0.15rem;
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      border: 1px solid rgba(140, 149, 159, 0.45);
+      padding: 0.28rem 0.62rem;
+      font-size: 0.76rem;
+      color: #c9d1d9;
+      background: rgba(17, 24, 39, 0.55);
+    }
+
+    .guided-demo-cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.15rem;
+    }
+
     .how-card .pillar-list {
       margin: 0.5rem 0 0;
       padding-left: 1.1rem;
@@ -549,6 +656,14 @@
       .final-cta-owl-button {
         animation: none;
       }
+
+      .guided-step {
+        transition: none;
+      }
+
+      .guided-dot {
+        animation: none;
+      }
     }
 
     .btn-link-ghost {
@@ -627,7 +742,7 @@
         <p class="hero-trust-anchor">Built for AI sovereignty — your thoughts never leave your machine.</p>
         <div class="hero-ctas">
           <a href="/app" class="btn btn-primary">Enter App</a>
-          <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
+          <a href="#guided-demo" id="seeHowBtn" class="btn btn-ghost">See how it works</a>
         </div>
         <p class="hero-note">Works even when you’re offline.</p>
 
@@ -681,31 +796,45 @@
     </section>
 
     <!-- HOW IT WORKS -->
-    <section id="how-it-works" class="section" aria-labelledby="how-title">
+    <section id="guided-demo" class="section" aria-labelledby="how-title">
       <h2 id="how-title">How it works</h2>
-      <div class="how-grid">
-        <article class="how-card">
-          <h3>Bring your work in</h3>
+      <div class="guided-demo-flow" id="guidedDemoFlow">
+        <article class="guided-step" data-step="1">
+          <h3>Start with your own work</h3>
           <p>
-            Drop in a document, paste a note, or start with a private question. WhisperLeaf gives you a local workspace for thinking, writing, and analysis.
+            Paste a note, drop in a document, or ask a question.
           </p>
+          <div class="guided-visual">"Summarize this note and pull out the main decisions."</div>
         </article>
-        <article class="how-card">
-          <h3>Process locally</h3>
+        <article class="guided-step" data-step="2">
+          <h3>Processed locally on your device</h3>
           <p>
-            WhisperLeaf runs on your device, so your content stays with you while the model reads, summarizes, and helps you work through ideas.
+            WhisperLeaf reads and works through your content without sending it to the cloud.
           </p>
+          <div class="guided-visual">
+            <span class="guided-chip"><span class="guided-dot" aria-hidden="true"></span>Thinking locally...</span>
+            <div>Local • Offline</div>
+          </div>
         </article>
-        <article class="how-card">
-          <h3>Choose what stays</h3>
+        <article class="guided-step" data-step="3">
+          <h3>You stay in control</h3>
           <p>
-            Save useful context only when you want to. Memory is explicit, reviewable, and under your control.
+            Get useful answers, summaries, or structure — and choose what becomes memory.
           </p>
+          <div class="guided-visual guided-response">
+            <div class="guided-response-answer">Key takeaway: two priorities and one open risk. Suggested next step: convert to a checklist.</div>
+            <div class="guided-response-meta">Context used: local note • 1 source</div>
+            <span class="guided-save">Save to memory</span>
+          </div>
         </article>
       </div>
       <p class="how-transition">
         A private workflow from input to insight — without sending your work to the cloud.
       </p>
+      <div class="guided-demo-cta">
+        <a href="/app" class="btn btn-primary">Try it now</a>
+        <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
+      </div>
     </section>
 
     <!-- TRANSPARENCY -->
@@ -804,6 +933,54 @@
         if (btn) btn.classList.add('owl-cta-clicked');
         setTimeout(function () { window.location.href = '/app'; }, 120);
       });
+    })();
+
+    (function () {
+      var seeHowBtn = document.getElementById('seeHowBtn');
+      var demo = document.getElementById('guided-demo');
+      var flow = document.getElementById('guidedDemoFlow');
+      if (!demo || !flow) return;
+      var steps = Array.prototype.slice.call(flow.querySelectorAll('.guided-step'));
+      if (!steps.length) return;
+
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var activated = false;
+
+      function activateDemo() {
+        if (activated) return;
+        activated = true;
+        steps.forEach(function (step, i) {
+          if (reducedMotion) {
+            step.classList.add('is-active');
+            return;
+          }
+          setTimeout(function () {
+            step.classList.add('is-active');
+          }, i * 220);
+        });
+      }
+
+      if (seeHowBtn) {
+        seeHowBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          demo.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+          activateDemo();
+        });
+      }
+
+      if ('IntersectionObserver' in window) {
+        var obs = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              activateDemo();
+              obs.disconnect();
+            }
+          });
+        }, { threshold: 0.35 });
+        obs.observe(demo);
+      } else {
+        activateDemo();
+      }
     })();
   </script>
 </body>

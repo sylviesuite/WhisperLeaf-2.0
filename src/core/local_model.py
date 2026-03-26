@@ -112,6 +112,13 @@ class LocalModelClient:
             "options": {"num_ctx": 4096},
         }
         model_endpoint = f"{self.base_url}/api/chat"
+        prompt_length = sum(len(m.get("content", "")) for m in full_messages)
+        print(
+            "[WhisperLeaf model debug] chat_stream start",
+            "MODEL_ENDPOINT=", model_endpoint,
+            "MODEL_NAME=", self.model_name,
+            "PROMPT_LENGTH=", prompt_length,
+        )
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream("POST", model_endpoint, json=payload) as resp:
@@ -125,9 +132,13 @@ class LocalModelClient:
                         line = line.strip()
                         if not line:
                             continue
+                        if chunk_count == 0:
+                            print("[WhisperLeaf model debug] first raw NDJSON line (first 180): %r" % line[:180])
                         try:
                             data = json.loads(line)
                         except json.JSONDecodeError:
+                            if chunk_count == 0:
+                                print("[WhisperLeaf model debug] first line JSON decode failed; continuing")
                             continue
                         msg = data.get("message") or {}
                         content = msg.get("content") or data.get("response") or data.get("delta") or ""
