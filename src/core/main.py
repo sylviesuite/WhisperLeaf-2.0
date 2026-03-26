@@ -155,6 +155,32 @@ WHISPERLEAF_VOICE_SPEC_LAYER = (
     "If Capture Mode / LeafLink / Structure Mode shapes this turn, follow that shape but keep this tone."
 )
 
+WHISPERLEAF_RESPONSE_FORMAT_LAYER = (
+    "WhisperLeaf response shape: "
+    "(1) Start with a **Direct Answer** in 1–2 clear sentences (no filler). "
+    "For **comparisons, choices, or tradeoffs**, that first beat should state the **most important distinction or tradeoff**—not a balanced preamble. "
+    "(2) Add a **Structured Breakdown** only when useful (steps, options, tradeoffs): 2–4 short bullets max. "
+    "(3) Optionally end with one light **Next step** suggestion when it helps; never pushy. "
+    "Use bullets for comparisons/tradeoffs/steps; do not force bullets for simple factual answers. "
+    "Keep default length concise; expand only when the user explicitly asks for depth. "
+    "Avoid long paragraphs, repetition, hype, or generic advisor prose. "
+    "You may subtly bold key distinctions when it improves scanability (e.g., **Option A** vs **Option B**)."
+)
+
+# Tightens reasoning presentation and practical prioritization without lengthening replies (prompt-only).
+WHISPERLEAF_SHARPNESS_LAYER = (
+    "Decision sharpness (same length budget—**tighter**, not longer): "
+    "For comparisons or “which should I…”, **lead with the key distinction or tradeoff** in the first sentence when you can "
+    "(e.g. one axis where the options differ most). "
+    "Avoid empty openers like “it depends”, “both have pros and cons”, or “there are many factors” **unless** uncertainty truly dominates—then say what would resolve it in one short clause. "
+    "When practical help is asked, prefer a **grounded default or judgment** (“for most people…”, “if X matters more than Y…”, “unless you need…, …”) over neutral mush that avoids helping the user choose. "
+    "Do **not** restate the question or add textbook filler—keep the useful part. "
+    "If context is missing, offer the **most reasonable default path first**, then what would change the call. "
+    "Preserve flow: direct answer → bullets when useful → optional **Takeaway** → optional next step. "
+    "Stay honest: **no invented specifics**; if limits matter, one clear line (“without budget/use case, I’d default to…”). "
+    "Strong answers often surface **one tradeoff early**, name a **likely default**, or give a **simple decision rule**—weak ones sound balanced but decide nothing."
+)
+
 
 def is_explicit_codebase_query(message: str) -> bool:
     """
@@ -1015,6 +1041,29 @@ async def chat_endpoint(payload: ChatRequest):
         m = (user_message or "").lower()
         return (" vs " in m) or ("vs." in m) or ("better" in m) or ("compare" in m)
 
+    def detect_takeaway_opportunity(user_message: str) -> bool:
+        """
+        Insight Layer trigger: include one practical takeaway for decisions/tradeoffs/planning.
+        Skip for simple factual/definition and short yes-no prompts.
+        """
+        m = (user_message or "").strip().lower()
+        if not m:
+            return False
+        if detect_simple_query(user_message):
+            return False
+
+        # Short yes/no style prompts should not force a takeaway.
+        yn_prefixes = ("is ", "are ", "was ", "were ", "do ", "does ", "did ", "can ", "will ", "should ")
+        if any(m.startswith(p) for p in yn_prefixes) and len(re.findall(r"[a-z0-9]+", m)) <= 8:
+            return False
+
+        cues = (
+            " vs ", "vs.", "compare", "better", "best option", "which option", "tradeoff", "trade-off",
+            "choose", "decision", "decide", "plan", "roadmap", "next step", "next steps", "prioritize",
+            "strategy", "pros and cons", "pros/cons", "what should i", "should i",
+        )
+        return any(c in m for c in cues)
+
     def detect_depth_intent(user_message: str) -> str:
         """
         Rule-based depth intent classifier.
@@ -1348,14 +1397,32 @@ async def chat_endpoint(payload: ChatRequest):
             if wants_follow_up_question
             else "End with a statement (no question)."
         )
+    takeaway_guidance_line = (
+        "Insight layer: after the main structured response, optionally add exactly one line in this format: "
+        "'**Takeaway:** <one practical decision rule or conclusion sentence>'. "
+        "Use only when the user is comparing options, making a decision, evaluating tradeoffs, or planning next steps. "
+        "Skip it for simple facts, short definitions, or yes/no replies. "
+        "Quality over frequency: omit if the takeaway would be generic or repetitive."
+        if detect_takeaway_opportunity(message_for_model)
+        else (
+            "Insight layer: do not add a '**Takeaway:**' line for this turn "
+            "(keep to direct answer + optional structure only)."
+        )
+    )
     response_style_guidance = (
         WHISPERLEAF_VOICE_SPEC_LAYER
+        + "\n\n"
+        + WHISPERLEAF_RESPONSE_FORMAT_LAYER
+        + "\n\n"
+        + WHISPERLEAF_SHARPNESS_LAYER
         + "\n\n"
         "Response structure: put the practical answer in the first sentence when the user wants steps, tools, health choices, or “what should I do”—no essay lead-in. "
         "Use short bullets for multiple options; keep explanations brief and action-tied. "
         "Avoid generic buzzwords and filler; when the user is discussing a domain, prefer 1–2 concrete, mechanism-level details over vague categories. "
         "Follow-up behavior: do not always end with a question. "
         + follow_up_guidance_line
+        + " "
+        + takeaway_guidance_line
         + " "
         "Use the optional-depth pattern **mainly** for explanation / information questions—not when the user needs urgent practical steps first. "
         "Do not use salesy enthusiasm. "
