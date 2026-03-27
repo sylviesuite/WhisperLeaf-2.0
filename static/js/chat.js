@@ -66,12 +66,13 @@ const ChatController = {
     this.els.modelRetryBtn = document.getElementById('modelRetryBtn');
     this.els.mindMemoryBtn = document.getElementById('mindMemoryBtn');
     this.els.mindMemoryLabel = document.getElementById('mindMemoryLabel');
+    this.els.memorySidebarSection = document.getElementById('memorySidebarSection');
     this.els.memoryVisibilityPanel = document.getElementById('memoryVisibilityPanel');
     this.els.memorySnippetsList = document.getElementById('memorySnippetsList');
     this.els.memorySavedNotification = document.getElementById('memorySavedNotification');
     this.els.memorySavedPreview = document.getElementById('memorySavedPreview');
+    this.els.savedMemoriesSection = document.getElementById('savedMemoriesSection');
     this.els.savedMemoriesList = document.getElementById('savedMemoriesList');
-    this.els.savedMemoriesEmpty = document.getElementById('savedMemoriesEmpty');
     this.els.documentsList = document.getElementById('documentsList');
     this.els.documentsEmpty = document.getElementById('documentsEmpty');
     this.els.documentUploadInput = document.getElementById('documentUploadInput');
@@ -265,7 +266,8 @@ const ChatController = {
 
   async loadSavedMemories() {
     const list = this.els.savedMemoriesList;
-    const empty = this.els.savedMemoriesEmpty;
+    const savedSection = this.els.savedMemoriesSection;
+    const memorySection = this.els.memorySidebarSection;
     if (!list) return;
     let serverMemories = [];
     try {
@@ -281,8 +283,18 @@ const ChatController = {
     const localMemories = this.loadLocalDemoSavedMemories();
     const merged = serverMemories.concat(localMemories);
     this.renderSavedMemoriesList(merged);
-    if (empty) {
-      empty.classList.toggle('hidden', merged.length > 0);
+    const hasAnyMemory = merged.length > 0;
+    if (savedSection) {
+      savedSection.classList.toggle('hidden', !hasAnyMemory);
+    }
+    if (memorySection) {
+      memorySection.classList.toggle('hidden', !hasAnyMemory);
+    }
+    if (!hasAnyMemory && this.els.memoryVisibilityPanel) {
+      this.els.memoryVisibilityPanel.classList.add('hidden');
+    }
+    if (!hasAnyMemory && this.els.mindMemoryBtn) {
+      this.els.mindMemoryBtn.setAttribute('aria-expanded', 'false');
     }
   },
 

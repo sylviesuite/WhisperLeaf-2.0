@@ -179,6 +179,23 @@
       transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
     }
 
+    .sidebar-section-system {
+      padding: 0.45rem 0.65rem;
+    }
+
+    .sidebar-system-model {
+      margin: 0;
+      font-size: 0.8rem;
+      color: #e6edf3;
+    }
+
+    .sidebar-system-status {
+      margin: 0.18rem 0 0;
+      font-size: 0.71rem;
+      color: #8b949e;
+      line-height: 1.35;
+    }
+
     .sidebar-section-title {
       margin: 0 0 0.5rem 0;
       font-size: 0.72rem;
@@ -220,6 +237,24 @@
       gap: 0.5rem;
       width: 100%;
       margin-top: auto;
+    }
+
+    .sidebar-footer-links {
+      width: 100%;
+      margin-top: 0.35rem;
+      text-align: center;
+    }
+
+    .sidebar-footer-link {
+      font-size: 0.72rem;
+      color: #8b949e;
+      text-decoration: none;
+      border-bottom: 1px dotted rgba(139, 148, 158, 0.45);
+    }
+
+    .sidebar-footer-link:hover {
+      color: #c9d1d9;
+      border-bottom-color: rgba(201, 209, 217, 0.6);
     }
 
     .sidebar-action-buttons .btn,
@@ -3001,40 +3036,12 @@
         <ul id="sidebarHistoryList" class="sidebar-history-list" aria-label="Recent user messages"></ul>
       </div>
       <div class="sidebar-sections sidebar-expanded-only">
-        <section class="sidebar-section" aria-label="System">
+        <section id="systemSection" class="sidebar-section sidebar-section-system" aria-label="System">
           <h3 class="sidebar-section-title">System</h3>
-          <dl class="sidebar-dl">
-            <dt>Model</dt>
-            <dd id="mindModel">Llama 3.2 (local)</dd>
-            <dt>Status</dt>
-            <dd>Running on this machine</dd>
-            <dt>Privacy</dt>
-            <dd>No external calls</dd>
-          </dl>
+          <p id="mindModel" class="sidebar-system-model">Llama 3.2 (local)</p>
+          <p class="sidebar-system-status">Running locally • No external calls</p>
         </section>
-        <section class="sidebar-section" aria-label="Memory">
-          <h3 class="sidebar-section-title">Memory</h3>
-          <dl class="sidebar-dl">
-            <dt>Memory</dt>
-            <dd>
-              <button type="button" id="mindMemoryBtn" class="memory-indicator-btn" title="View memories used in this conversation" aria-expanded="false" aria-controls="memoryVisibilityPanel">
-                <span id="mindMemoryLabel">Using saved memories</span>
-              </button>
-            </dd>
-            <dt>Knowledge</dt>
-            <dd>Local documents available</dd>
-          </dl>
-          <div id="memoryVisibilityPanel" class="memory-visibility-panel hidden" role="region" aria-label="Memories used in this turn" aria-live="polite">
-            <div class="memory-visibility-header">Memories used</div>
-            <ul id="memorySnippetsList" class="memory-snippets-list"></ul>
-          </div>
-        </section>
-        <section class="sidebar-section saved-memories-section" aria-label="Saved Memories">
-          <h3 class="sidebar-section-title">Saved Memories</h3>
-          <ul id="savedMemoriesList" class="saved-memories-list" aria-label="Saved memory entries"></ul>
-          <p id="savedMemoriesEmpty" class="saved-memories-empty hidden">No saved memories yet.</p>
-        </section>
-        <section class="sidebar-section documents-section" aria-label="Documents">
+        <section id="documentsSection" class="sidebar-section documents-section" aria-label="Documents">
           <h3 class="sidebar-section-title">Documents</h3>
           <input type="file" id="documentUploadInput" class="document-upload-input hidden" accept=".txt,.md,.markdown" aria-label="Choose document to upload">
           <button type="button" id="documentUploadBtn" class="btn btn-upload-document" title="Upload a .txt or .md file">Upload Document</button>
@@ -3044,15 +3051,22 @@
           <p id="documentsEmpty" class="documents-empty hidden">No documents uploaded yet.</p>
           <p id="documentsNoResults" class="documents-no-results hidden">No documents found.</p>
         </section>
-      </div>
-      <div class="sidebar-actions-heading sidebar-expanded-only" aria-label="Actions">
-        <h3 class="sidebar-section-title">Actions</h3>
+        <section id="memorySidebarSection" class="sidebar-section hidden" aria-label="Memory">
+          <h3 class="sidebar-section-title">Memory</h3>
+          <button type="button" id="mindMemoryBtn" class="memory-indicator-btn" title="View memories used in this conversation" aria-expanded="false" aria-controls="memoryVisibilityPanel">
+            <span id="mindMemoryLabel">Using saved memories</span>
+          </button>
+          <div id="memoryVisibilityPanel" class="memory-visibility-panel hidden" role="region" aria-label="Memories used in this turn" aria-live="polite">
+            <div class="memory-visibility-header">Memories used</div>
+            <ul id="memorySnippetsList" class="memory-snippets-list"></ul>
+          </div>
+        </section>
+        <section id="savedMemoriesSection" class="sidebar-section saved-memories-section hidden" aria-label="Saved Memories">
+          <h3 class="sidebar-section-title">Saved Memories</h3>
+          <ul id="savedMemoriesList" class="saved-memories-list" aria-label="Saved memory entries"></ul>
+        </section>
       </div>
       <div class="sidebar-action-buttons">
-        <a href="/transparency" class="btn sidebar-link-btn" title="Transparency and benchmarks">
-          <span class="sidebar-expanded-only">Transparency</span>
-          <span class="sidebar-collapsed-only" aria-hidden="true">⊙</span>
-        </a>
         <button type="button" class="btn" id="newSessionBtn" title="Start a new conversation">
           <span class="sidebar-expanded-only">New Session</span>
           <span class="sidebar-collapsed-only" aria-hidden="true">+</span>
@@ -3061,6 +3075,9 @@
           <span class="sidebar-expanded-only">Clear Chat</span>
           <span class="sidebar-collapsed-only" aria-hidden="true">✕</span>
         </button>
+      </div>
+      <div class="sidebar-footer-links sidebar-expanded-only">
+        <a href="/transparency" class="sidebar-footer-link" title="Transparency and benchmarks">Transparency</a>
       </div>
     </aside>
     <main class="app-main">
