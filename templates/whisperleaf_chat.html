@@ -3051,20 +3051,19 @@
           <p id="documentsEmpty" class="documents-empty hidden">No documents uploaded yet.</p>
           <p id="documentsNoResults" class="documents-no-results hidden">No documents found.</p>
         </section>
-        <section id="memorySidebarSection" class="sidebar-section hidden" aria-label="Memory">
+        <section id="memorySidebarSection" class="sidebar-section" aria-label="Memory">
           <h3 class="sidebar-section-title">Memory</h3>
-          <button type="button" id="mindMemoryBtn" class="memory-indicator-btn" title="View memories used in this conversation" aria-expanded="false" aria-controls="memoryVisibilityPanel">
-            <span id="mindMemoryLabel">Using saved memories</span>
-          </button>
-          <div id="memoryVisibilityPanel" class="memory-visibility-panel hidden" role="region" aria-label="Memories used in this turn" aria-live="polite">
-            <div class="memory-visibility-header">Memories used</div>
-            <ul id="memorySnippetsList" class="memory-snippets-list"></ul>
-          </div>
+          <p class="sidebar-system-status">Memory: Enabled</p>
         </section>
-        <section id="savedMemoriesSection" class="sidebar-section saved-memories-section hidden" aria-label="Saved Memories">
+        <section id="savedMemoriesSection" class="sidebar-section saved-memories-section" aria-label="Saved Memories">
           <h3 class="sidebar-section-title">Saved Memories</h3>
           <ul id="savedMemoriesList" class="saved-memories-list" aria-label="Saved memory entries"></ul>
+          <p id="savedMemoriesEmpty" class="saved-memories-empty hidden">No memories saved yet.</p>
+          <p id="savedMemoriesHint" class="saved-memories-empty hidden">Save items from your inbox to use them later.</p>
         </section>
+      </div>
+      <div class="sidebar-actions-heading sidebar-expanded-only" aria-label="Session">
+        <h3 class="sidebar-section-title">Session</h3>
       </div>
       <div class="sidebar-action-buttons">
         <button type="button" class="btn" id="newSessionBtn" title="Start a new conversation">
@@ -3077,7 +3076,7 @@
         </button>
       </div>
       <div class="sidebar-footer-links sidebar-expanded-only">
-        <a href="/transparency" class="sidebar-footer-link" title="Transparency and benchmarks">Transparency</a>
+        <a href="/transparency" class="sidebar-footer-link" title="View system activity">View system activity →</a>
       </div>
     </aside>
     <main class="app-main">
@@ -3152,10 +3151,10 @@
               <h2 class="starter-title">A private AI workspace for thinking, not just chatting.</h2>
               <p class="starter-subtext">Ask a question, drop in a document, or paste a note. Everything stays on your device.</p>
               <div class="starter-prompts" id="starterPrompts">
-                <button type="button" class="starter-prompt-btn" data-prompt="Summarize this note and highlight key ideas">Summarize this note and highlight key ideas</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="What is an LLM?">What is an LLM?</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="What is AI sovereignty?">What is AI sovereignty?</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="Summarize a document privately on this device">Summarize a document privately on this device</button>
                 <button type="button" class="starter-prompt-btn" data-prompt="Help me think through an idea step by step">Help me think through an idea step by step</button>
-                <button type="button" class="starter-prompt-btn" data-prompt="Turn this into a clear plan">Turn this into a clear plan</button>
-                <button type="button" class="starter-prompt-btn" data-prompt="Explain a concept simply">Explain a concept simply</button>
               </div>
               <p class="starter-trust">Local • Offline • No tracking</p>
               <p id="starterDocNudge" class="starter-doc-nudge hidden">You can also ask questions about your local documents.</p>

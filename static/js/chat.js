@@ -73,6 +73,8 @@ const ChatController = {
     this.els.memorySavedPreview = document.getElementById('memorySavedPreview');
     this.els.savedMemoriesSection = document.getElementById('savedMemoriesSection');
     this.els.savedMemoriesList = document.getElementById('savedMemoriesList');
+    this.els.savedMemoriesEmpty = document.getElementById('savedMemoriesEmpty');
+    this.els.savedMemoriesHint = document.getElementById('savedMemoriesHint');
     this.els.documentsList = document.getElementById('documentsList');
     this.els.documentsEmpty = document.getElementById('documentsEmpty');
     this.els.documentUploadInput = document.getElementById('documentUploadInput');
@@ -266,8 +268,8 @@ const ChatController = {
 
   async loadSavedMemories() {
     const list = this.els.savedMemoriesList;
-    const savedSection = this.els.savedMemoriesSection;
-    const memorySection = this.els.memorySidebarSection;
+    const empty = this.els.savedMemoriesEmpty;
+    const hint = this.els.savedMemoriesHint;
     if (!list) return;
     let serverMemories = [];
     try {
@@ -283,19 +285,8 @@ const ChatController = {
     const localMemories = this.loadLocalDemoSavedMemories();
     const merged = serverMemories.concat(localMemories);
     this.renderSavedMemoriesList(merged);
-    const hasAnyMemory = merged.length > 0;
-    if (savedSection) {
-      savedSection.classList.toggle('hidden', !hasAnyMemory);
-    }
-    if (memorySection) {
-      memorySection.classList.toggle('hidden', !hasAnyMemory);
-    }
-    if (!hasAnyMemory && this.els.memoryVisibilityPanel) {
-      this.els.memoryVisibilityPanel.classList.add('hidden');
-    }
-    if (!hasAnyMemory && this.els.mindMemoryBtn) {
-      this.els.mindMemoryBtn.setAttribute('aria-expanded', 'false');
-    }
+    if (empty) empty.classList.toggle('hidden', merged.length > 0);
+    if (hint) hint.classList.toggle('hidden', merged.length > 0);
   },
 
   renderSavedMemoriesList(memories) {
