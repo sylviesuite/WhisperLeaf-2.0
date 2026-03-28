@@ -730,12 +730,24 @@
 
     .chat-status {
       flex-shrink: 0;
-      font-size: 12px;
-      opacity: 0.7;
       margin-top: 4px;
       margin-bottom: 8px;
       text-align: center;
-      color: #8b949e;
+    }
+
+    .chat-status-line {
+      font-size: 13px;
+      font-weight: 500;
+      color: #9da7b2;
+      line-height: 1.35;
+      margin: 0 0 3px 0;
+    }
+
+    .chat-status-sub {
+      font-size: 11px;
+      color: #6e7681;
+      line-height: 1.35;
+      margin: 0;
     }
 
     .thinking-step {
@@ -791,6 +803,7 @@
       .app-sidebar,
       .main-card,
       .sidebar-toggle,
+      .chat-compose-foot,
       .input-row,
       .input-row textarea,
       .input-row input,
@@ -876,18 +889,40 @@
       animation: whisper-cursor 1.2s ease-in-out infinite;
     }
 
+    .chat-compose-foot {
+      flex-shrink: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(17, 24, 39, 0.9);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+
+    .input-reassurance {
+      margin: 0;
+      padding: 0.45rem 1.25rem 0;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      color: #6e7681;
+      text-align: center;
+    }
+
     .input-row {
       flex-shrink: 0;
       display: flex;
       gap: 0.5rem;
       margin-top: 0;
-      padding: 1rem 1.25rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(17, 24, 39, 0.9); /* slightly lifted above main background */
-      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25); /* subtle shadow above */
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
-      transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
+      padding: 0.55rem 1.25rem 1rem;
+      border-top: none;
+      background: transparent;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      transition: background-color 0.14s ease, border-color 0.14s ease;
+    }
+
+    .chat-compose-foot .input-row {
+      padding-top: 0.35rem;
     }
 
     .input-row textarea,
@@ -918,8 +953,8 @@
       border-color: #58a6ff;
     }
 
-    .input-row.drag-over {
-      border-radius: 10px;
+    .chat-compose-foot.drag-over {
+      border-radius: 0 0 10px 10px;
       box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.35);
       border-top-color: rgba(56, 139, 253, 0.4);
     }
@@ -1747,11 +1782,22 @@
       line-height: 1.5;
     }
 
+    .starter-assistant-hint {
+      margin: 0.65rem auto 0;
+      max-width: 32rem;
+      font-size: 0.82rem;
+      color: #9da7b2;
+      line-height: 1.5;
+    }
+
     .starter-prompts {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 0.55rem;
-      margin-top: 0.9rem;
+      margin-top: 0.85rem;
+      max-width: 28rem;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .starter-prompt-btn {
@@ -3092,7 +3138,10 @@
             <button type="button" id="onboardingHelpBtn" class="btn-onboarding-help" title="Show welcome / help" aria-label="Show welcome and help">?</button>
           </div>
         </div>
-        <div class="chat-status" aria-live="polite">Local AI · Llama 3.2 · Private</div>
+        <div class="chat-status" role="status" aria-live="polite">
+          <div class="chat-status-line">🟢 Local • Offline</div>
+          <div class="chat-status-sub">Your data stays on this device</div>
+        </div>
         <div id="modelUnavailableBanner" class="model-unavailable-banner hidden" role="status" aria-live="polite">
           <div id="modelStatusIndicator" class="model-status-indicator unavailable">
             <span class="model-status-dot"></span>
@@ -3150,13 +3199,10 @@
             <div class="starter-panel" id="starterPanel">
               <h2 class="starter-title">A private AI workspace for thinking, not just chatting.</h2>
               <p class="starter-subtext">Ask a question, drop in a document, or paste a note. Everything stays on your device.</p>
+              <p class="starter-assistant-hint">I'm here to help you think it through — calmly and clearly, one step at a time.</p>
               <div class="starter-prompts" id="starterPrompts">
-                <button type="button" class="starter-prompt-btn" data-prompt="What is an LLM?">What is an LLM?</button>
-                <button type="button" class="starter-prompt-btn" data-prompt="What is AI sovereignty?">What is AI sovereignty?</button>
-                <button type="button" class="starter-prompt-btn" data-prompt="Summarize a document privately on this device">Summarize a document privately on this device</button>
-                <button type="button" class="starter-prompt-btn" data-prompt="Help me think through an idea step by step">Help me think through an idea step by step</button>
+                <button type="button" class="starter-prompt-btn" data-prompt="Help me think through this idea without sending anything to the cloud.">Help me think through this idea without sending anything to the cloud.</button>
               </div>
-              <p class="starter-trust">Local • Offline • No tracking</p>
               <p id="starterDocNudge" class="starter-doc-nudge hidden">You can also ask questions about your local documents.</p>
             </div>
           </div>
@@ -3167,16 +3213,19 @@
         <div class="chat-leaflink-insert-hint-wrap" aria-hidden="true">
           <span id="chatLeafLinkInsertHint" class="chat-leaflink-insert-hint hidden" role="status" aria-live="polite"></span>
         </div>
-        <form id="chatForm" class="input-row" aria-label="Send message">
-          <textarea
-            id="messageInput"
-            placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-            autocomplete="off"
-            aria-label="Message"
-            rows="1"
-          ></textarea>
-          <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
-        </form>
+        <div class="chat-compose-foot">
+          <p class="input-reassurance">Nothing you type here is sent anywhere.</p>
+          <form id="chatForm" class="input-row" aria-label="Send message">
+            <textarea
+              id="messageInput"
+              placeholder="Start typing… nothing leaves your device."
+              autocomplete="off"
+              aria-label="Message"
+              rows="1"
+            ></textarea>
+            <button type="submit" class="btn btn-send" id="sendBtn">Send</button>
+          </form>
+        </div>
         <div id="inputDropFeedback" class="input-drop-feedback hidden" role="status" aria-live="polite"></div>
         <div id="documentExcerptPanel" class="document-excerpt-panel hidden" role="dialog" aria-label="Document excerpt preview" aria-modal="true">
           <div class="document-excerpt-panel-inner">

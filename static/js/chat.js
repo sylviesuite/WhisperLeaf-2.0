@@ -40,6 +40,27 @@ const ChatController = {
     this.loadSavedMemories();
     this.loadDocuments();
     this.updateChatHintsVisibility();
+    this.maybeFocusEmptyChatInput();
+  },
+
+  maybeFocusEmptyChatInput() {
+    const input = this.els.messageInput;
+    if (!input) return;
+    if (this.state.hasStartedChat) return;
+    const cw = this.els.chatWindow;
+    if (cw && cw.querySelectorAll('.message').length > 0) return;
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 640px)').matches) {
+      return;
+    }
+    const ob = this.els.onboardingScreen;
+    if (ob && !ob.classList.contains('hidden')) return;
+    requestAnimationFrame(() => {
+      try {
+        input.focus({ preventScroll: true });
+      } catch (_) {
+        input.focus();
+      }
+    });
   },
 
   cacheElements() {
@@ -634,6 +655,7 @@ const ChatController = {
     }
 
     if (chatForm) {
+      const composeFoot = chatForm.closest('.chat-compose-foot');
       chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         this.sendMessage();
@@ -642,15 +664,18 @@ const ChatController = {
         e.preventDefault();
         e.stopPropagation();
         chatForm.classList.add('drag-over');
+        if (composeFoot) composeFoot.classList.add('drag-over');
       });
       chatForm.addEventListener('dragleave', (e) => {
         if (e.relatedTarget && chatForm.contains(e.relatedTarget)) return;
         chatForm.classList.remove('drag-over');
+        if (composeFoot) composeFoot.classList.remove('drag-over');
       });
       chatForm.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
         chatForm.classList.remove('drag-over');
+        if (composeFoot) composeFoot.classList.remove('drag-over');
         const files = e.dataTransfer && e.dataTransfer.files;
         const file = files && files.length > 0 ? files[0] : null;
         if (file) this.uploadDroppedFile(file);
