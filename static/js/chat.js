@@ -720,6 +720,17 @@ const ChatController = {
       });
     }
 
+    const composeSuggestionChips = document.getElementById('composeSuggestionChips');
+    if (composeSuggestionChips) {
+      composeSuggestionChips.addEventListener('click', (e) => {
+        const btn = e.target.closest('.compose-suggestion-chip');
+        if (!btn) return;
+        const prompt = (btn.getAttribute('data-prompt') || btn.textContent || '').trim();
+        if (!prompt) return;
+        this.applyStarterPrompt(prompt, true);
+      });
+    }
+
     const onboardingHelpBtn = this.els.onboardingHelpBtn;
     if (onboardingHelpBtn) onboardingHelpBtn.addEventListener('click', () => this.reopenOnboarding());
 

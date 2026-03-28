@@ -804,6 +804,7 @@
       .main-card,
       .sidebar-toggle,
       .chat-compose-foot,
+      .compose-suggestion-chip,
       .input-row,
       .input-row textarea,
       .input-row input,
@@ -898,13 +899,46 @@
       backdrop-filter: blur(6px);
     }
 
-    .input-reassurance {
+    .compose-suggestion-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 0.35rem 0.45rem;
+      padding: 0.55rem 1.25rem 0.3rem;
       margin: 0;
-      padding: 0.45rem 1.25rem 0;
+    }
+
+    .compose-suggestion-chip {
+      appearance: none;
+      margin: 0;
+      padding: 0.32rem 0.65rem;
+      max-width: 100%;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background: rgba(255, 255, 255, 0.035);
+      color: #7d8590;
       font-size: 0.72rem;
-      line-height: 1.4;
-      color: #6e7681;
+      font-family: inherit;
+      line-height: 1.35;
       text-align: center;
+      cursor: pointer;
+      transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+    }
+
+    .compose-suggestion-chip:hover {
+      color: #9da7b2;
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .compose-suggestion-chip:focus {
+      outline: none;
+    }
+
+    .compose-suggestion-chip:focus-visible {
+      outline: 2px solid rgba(88, 166, 255, 0.45);
+      outline-offset: 2px;
     }
 
     .input-row {
@@ -922,7 +956,7 @@
     }
 
     .chat-compose-foot .input-row {
-      padding-top: 0.35rem;
+      padding-top: 0.4rem;
     }
 
     .input-row textarea,
@@ -3214,7 +3248,13 @@
           <span id="chatLeafLinkInsertHint" class="chat-leaflink-insert-hint hidden" role="status" aria-live="polite"></span>
         </div>
         <div class="chat-compose-foot">
-          <p class="input-reassurance">Nothing you type here is sent anywhere.</p>
+          <div class="compose-suggestion-chips" id="composeSuggestionChips" role="group" aria-label="Quick suggestions">
+            <button type="button" class="compose-suggestion-chip" data-prompt="Help me think through an idea">Help me think through an idea</button>
+            <button type="button" class="compose-suggestion-chip" data-prompt="Organize my thoughts into a plan">Organize my thoughts into a plan</button>
+            <button type="button" class="compose-suggestion-chip" data-prompt="Review something privately">Review something privately</button>
+            <button type="button" class="compose-suggestion-chip" data-prompt="How does WhisperLeaf work on my device?">How does WhisperLeaf work on my device?</button>
+            <button type="button" class="compose-suggestion-chip" data-prompt="What does 'your data stays with you' mean?">What does 'your data stays with you' mean?</button>
+          </div>
           <form id="chatForm" class="input-row" aria-label="Send message">
             <textarea
               id="messageInput"
