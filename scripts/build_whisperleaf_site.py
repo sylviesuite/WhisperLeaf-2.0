@@ -26,7 +26,8 @@ def main() -> None:
     m3 = re.search(r"<script>\s*(.*?)\s*</script>\s*</body>", landing, re.DOTALL)
     assert m3
     js = m3.group(1).strip().replace(
-        "window.location.href = '/app'", "window.location.href = 'index.html#how-whisperleaf-works'"
+        "window.location.href = '/downloads/whisperleaf-beta.zip'",
+        "window.location.href = 'downloads/whisperleaf-beta.zip'",
     )
     (SITE / "assets/js/landing.js").write_text(js + "\n", encoding="utf-8")
 
@@ -47,7 +48,7 @@ def main() -> None:
     idx = idx.replace('href="/"', 'href="index.html"')
     idx = idx.replace('src="/static/owl.png"', 'src="assets/images/owl.png"')
     idx = idx.replace('href="/transparency"', 'href="transparency.html"')
-    idx = idx.replace('href="/app"', 'href="index.html#how-whisperleaf-works"')
+    idx = idx.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/whisperleaf-beta.zip"')
     (SITE / "index.html").write_text(idx, encoding="utf-8")
 
     tr = re.sub(
@@ -75,6 +76,14 @@ def main() -> None:
     md = ROOT / "benchmarks/whisperleaf_energy_methodology.md"
     if md.is_file():
         shutil.copy2(md, SITE / "assets/docs/whisperleaf_energy_methodology.md")
+
+    dl_src = ROOT / "static" / "downloads"
+    if dl_src.is_dir():
+        dl_dst = SITE / "downloads"
+        dl_dst.mkdir(parents=True, exist_ok=True)
+        for f in dl_src.iterdir():
+            if f.is_file():
+                shutil.copy2(f, dl_dst / f.name)
 
     print("OK:", SITE)
 

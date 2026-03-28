@@ -5,7 +5,7 @@
         e.preventDefault();
         var btn = el.querySelector('.final-cta-owl-button');
         if (btn) btn.classList.add('owl-cta-clicked');
-        setTimeout(function () { window.location.href = 'index.html#how-whisperleaf-works'; }, 120);
+        setTimeout(function () { window.location.href = 'downloads/whisperleaf-beta.zip'; }, 120);
       });
     })();
 

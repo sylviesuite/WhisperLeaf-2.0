@@ -116,6 +116,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+DOWNLOADS_DIR = STATIC_DIR / "downloads"
+if DOWNLOADS_DIR.is_dir():
+    app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
+
 # Benchmarks dir – methodology and benchmark docs (e.g. /benchmarks/whisperleaf_energy_methodology.md)
 BENCHMARKS_DIR = PROJECT_ROOT / "benchmarks"
 if BENCHMARKS_DIR.exists():

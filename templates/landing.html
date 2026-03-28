@@ -901,7 +901,7 @@
       <nav class="wl-nav">
         <a href="/transparency">Transparency</a>
         <a href="#how-whisperleaf-works">Beta</a>
-        <a href="/app">Enter App</a>
+        <a href="/downloads/whisperleaf-beta.zip" download>Try it now</a>
       </nav>
     </div>
   </header>
@@ -921,7 +921,7 @@
         <p class="hero-trust-anchor">Built for AI sovereignty — your thoughts never leave your machine.</p>
         <div>
           <div class="hero-ctas">
-            <a href="/app" class="btn btn-primary">Enter Beta</a>
+            <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Try it now</a>
             <button type="button" id="seeHowBtn" class="btn btn-ghost">See how it works</button>
           </div>
           <p class="hero-beta-explain">
@@ -981,14 +981,15 @@
     </section>
 
     <!-- HOW WHISPERLEAF WORKS (BETA STEPS) -->
-    <section id="how-whisperleaf-works" class="section how-section" aria-labelledby="how-wl-works-title">
-      <h2 id="how-wl-works-title">How WhisperLeaf Works</h2>
-      <div class="how-grid">
+    <section class="section how-section" aria-labelledby="how-wl-works-title">
+      <div id="how-whisperleaf-works" class="how-whisperleaf-jump-target">
+        <h2 id="how-wl-works-title">How WhisperLeaf Works</h2>
+        <div class="how-grid">
         <article class="how-card">
           <h3>Step 1 — Download</h3>
           <p>Install WhisperLeaf on your computer.</p>
           <div class="beta-step-download-wrap">
-            <a href="#" class="beta-download-btn">Download WhisperLeaf Beta</a>
+            <a href="/downloads/whisperleaf-beta.zip" download class="beta-download-btn">Download WhisperLeaf Beta</a>
           </div>
         </article>
         <article class="how-card">
@@ -999,6 +1000,7 @@
           <h3>Step 3 — Think privately</h3>
           <p>Your prompts, documents, and ideas never leave your device.</p>
         </article>
+        </div>
       </div>
       <h3 class="section-subtitle" id="beta-system-requirements">System Requirements (Beta)</h3>
       <ul class="transparency-list beta-reqs-list">
@@ -1045,7 +1047,7 @@
         A private workflow from input to insight — without sending your work to the cloud.
       </p>
       <div class="guided-demo-cta">
-        <a href="/app" class="btn btn-primary">Try it now</a>
+        <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Try it now</a>
         <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
       </div>
     </section>
@@ -1125,14 +1127,14 @@
         Keep your ideas, documents, and research where they belong — on your own machine.
       </p>
       <div class="final-cta-actions">
-        <a href="/app" class="btn btn-primary">Enter App</a>
+        <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Try it now</a>
         <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
       </div>
-      <a href="/app" class="final-cta-owl" id="finalCtaOwl" aria-label="Enter WhisperLeaf app">
+      <a href="/downloads/whisperleaf-beta.zip" download class="final-cta-owl" id="finalCtaOwl" aria-label="Try it now — download WhisperLeaf beta">
         <div class="final-cta-owl-button">
           <img src="/static/owl.png" alt="WhisperLeaf owl" />
         </div>
-        <div class="final-cta-owl-label">Enter WhisperLeaf</div>
+        <div class="final-cta-owl-label">Try it now</div>
       </a>
     </section>
   </div>
@@ -1173,7 +1175,7 @@
         e.preventDefault();
         var btn = el.querySelector('.final-cta-owl-button');
         if (btn) btn.classList.add('owl-cta-clicked');
-        setTimeout(function () { window.location.href = '/app'; }, 120);
+        setTimeout(function () { window.location.href = '/downloads/whisperleaf-beta.zip'; }, 120);
       });
     })();
 
