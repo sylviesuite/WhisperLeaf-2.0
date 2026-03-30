@@ -148,3 +148,4 @@ whisperleaf.conf
 ############################
 .cursorignore
 .cursorindexingignore*.zip
+*.zip
