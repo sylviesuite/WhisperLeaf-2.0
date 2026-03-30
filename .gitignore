@@ -1,16 +1,12 @@
-image.png# WhisperLeaf .gitignore
+# WhisperLeaf .gitignore
 
-############################
 # Python
-############################
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 
-############################
 # Virtual Environments
-############################
 venv/
 env/
 ENV/
@@ -19,14 +15,17 @@ env.bak/
 venv.bak/
 whisperleaf_env/
 
-############################
 # Distribution / packaging
-############################
 .Python
 build/
 develop-eggs/
 dist/
 downloads/
+
+# Netlify static site: track beta ZIP (global `downloads/` rule would otherwise ignore this folder)
+!whisperleaf-site/downloads/
+!whisperleaf-site/downloads/*.zip
+
 eggs/
 .eggs/
 lib/
@@ -35,117 +34,107 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-############################
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
 # Logs
-############################
 logs/
 *.log
 
-############################
-# Database / User Data
-############################
+# Database / user data
 data/
 *.db
 *.sqlite
 *.sqlite3
 
-############################
-# Secrets / Config
-############################
+# Secrets / config
 .env
+.envrc
 config/.env
 config/config.yaml
 config/constitutional_rules.yaml
 
-############################
-# Encryption Keys
-############################
+# Encryption keys
 *.key
 *.pem
 *.crt
 
-############################
-# Temporary Files
-############################
+# Temporary files
 tmp/
 temp/
 .tmp/
 
-############################
-# Cache
-############################
-.cache/
-*.cache
-
-############################
-# Testing
-############################
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-
-############################
 # IDE
-############################
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-############################
 # OS
-############################
 .DS_Store
 Thumbs.db
 
-############################
-# Jupyter
-############################
-.ipynb_checkpoints
-
-############################
 # Documentation
-############################
 docs/_build/
 site/
+mkdocs documentation
+/site
 
-############################
-# WhisperLeaf Data
-############################
+# Jupyter
+.ipynb_checkpoints
+
+# Python version / tooling
+.python-version
+.pdm-python
+.pdm-build/
+.pixi
+__pypackages__/
+.ruff_cache/
+.pypirc
+
+# WhisperLeaf specific
 memories/
 emotional_data/
 personal_content/
-
-############################
-# Local AI Models
-############################
 models/
 *.model
 *.bin
-
-############################
-# Content Cache
-############################
 content_cache/
 rss_cache/
-
-############################
-# System Files
-############################
 .whisperleaf/
 whisperleaf.conf
 
-############################
-# Cursor AI
-############################
+# Cursor
 .cursorignore
-.cursorindexingignore*.zip
-*.zip
+.cursorindexingignore

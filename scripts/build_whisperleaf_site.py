@@ -50,7 +50,8 @@ def main() -> None:
     idx = idx.replace('src="/assets/images/owl.png"', 'src="assets/images/owl.png"')
     idx = idx.replace('href="/transparency"', 'href="transparency.html"')
     idx = idx.replace('href="/download"', 'href="download.html"')
-    idx = idx.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/whisperleaf-beta.zip"')
+    idx = idx.replace('href="/downloads/WhisperLeaf-Beta.zip"', 'href="downloads/WhisperLeaf-Beta.zip"')
+    idx = idx.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/WhisperLeaf-Beta.zip"')
     (SITE / "index.html").write_text(idx, encoding="utf-8")
 
     tr = re.sub(
@@ -77,7 +78,8 @@ def main() -> None:
     dl_page = dl_page.replace('href="/transparency"', 'href="transparency.html"')
     dl_page = dl_page.replace('href="/#how-whisperleaf-works"', 'href="index.html#how-whisperleaf-works"')
     dl_page = dl_page.replace('href="/download"', 'href="download.html"')
-    dl_page = dl_page.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/whisperleaf-beta.zip"')
+    dl_page = dl_page.replace('href="/downloads/WhisperLeaf-Beta.zip"', 'href="downloads/WhisperLeaf-Beta.zip"')
+    dl_page = dl_page.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/WhisperLeaf-Beta.zip"')
     dl_page = dl_page.replace('href="/"', 'href="index.html"')
     (SITE / "download.html").write_text(dl_page, encoding="utf-8")
 
@@ -90,16 +92,26 @@ def main() -> None:
     if md.is_file():
         shutil.copy2(md, SITE / "assets/docs/whisperleaf_energy_methodology.md")
 
+    dl_dst = SITE / "downloads"
+    dl_dst.mkdir(parents=True, exist_ok=True)
     dl_src = ROOT / "static" / "downloads"
     if dl_src.is_dir():
-        dl_dst = SITE / "downloads"
-        dl_dst.mkdir(parents=True, exist_ok=True)
         for f in dl_src.iterdir():
             if f.is_file():
                 shutil.copy2(f, dl_dst / f.name)
 
+    zip_out = dl_dst / "WhisperLeaf-Beta.zip"
+    root_zip = ROOT / "WhisperLeaf-Beta.zip"
+    if root_zip.is_file():
+        shutil.copy2(root_zip, zip_out)
+    elif (dl_dst / "whisperleaf-beta.zip").is_file() and not zip_out.is_file():
+        shutil.copy2(dl_dst / "whisperleaf-beta.zip", zip_out)
+
     # Netlify: pretty URL /download -> static file (avoids 404 on SPA-less export)
     (SITE / "_redirects").write_text("/download /download.html 200\n", encoding="utf-8")
+
+    if not zip_out.is_file():
+        print("WARN: missing", zip_out, "(add WhisperLeaf-Beta.zip at repo root or static/downloads/)")
 
     print("OK:", SITE)
 

@@ -53,6 +53,7 @@ from .memory_models import (
 from .chat_engine import generate_reply
 from .local_model import LocalModelClient
 from .memory_injection_guard import (
+    MEMORY_TOP_K,
     filter_relevant_memories,
     build_memory_context_block,
     detect_topic_reset,
@@ -852,10 +853,13 @@ async def _rewrite_memory_query(user_message: str) -> str:
         return (user_message or "").strip()
 
 
-async def _build_memory_context(user_message: str, query: str, limit: int = 5):
+async def _build_memory_context(user_message: str, query: str, limit: int = MEMORY_TOP_K):
     """
     Build a RELEVANT MEMORY context block via the Tool Bus (memory.search),
     then apply memory injection guardrails to prevent "memory bleed".
+
+    Conversation history (recentTurns) is assembled separately and always takes precedence;
+    this block only adds a few vault snippets when relevance_score is clearly high enough.
 
     Returns (block_string, injected_snippets_list) for model context and UI visibility.
     """
@@ -1182,7 +1186,9 @@ async def chat_endpoint(payload: ChatRequest):
         if not (memory_query or "").strip():
             memory_query = message_for_model
         # Use the live user message for pivot/relevance detection; use rewritten query only for retrieval.
-        memory_block, memory_snippets = await _build_memory_context(message_for_model, memory_query, limit=5)
+        memory_block, memory_snippets = await _build_memory_context(
+            message_for_model, memory_query, limit=MEMORY_TOP_K
+        )
     except Exception as e:
         print("[WhisperLeaf chat] memory retrieval failed (continuing without): %s" % e)
         memory_block = ""

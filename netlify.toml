@@ -1,0 +1,5 @@
+# WhisperLeaf marketing site (static export). Point Netlify “Publish directory” here
+# or rely on this file so deploys serve `whisperleaf-site/` (includes download.html + _redirects).
+[build]
+  command = "python3 scripts/build_whisperleaf_site.py"
+  publish = "whisperleaf-site"

@@ -1,12 +1,18 @@
 """
 Memory injection guardrails to prevent "memory bleed" across topic pivots.
 
-This is intentionally lightweight and rule-based for now:
-- Detect explicit pivot/new-topic intent.
-- Detect explicit "recall what you said earlier" intent.
-- Apply conservative relevance gating to retrieved memories.
-- Block known high-risk memory categories during normal chat unless explicitly requested.
-- Prefer injecting none when relevance is uncertain.
+Design goals (strict gate):
+- Prefer conversation turns (recentTurns) over long-term memory: the model sees recent
+  dialogue first; this module only admits a small set of *high-confidence* memories so
+  stale or tangential vault entries cannot override the present topic.
+- Long-term memory is used only when relevance is clear (see MEMORY_RELEVANCE_THRESHOLD).
+  Weak or ambiguous matches are dropped entirely — no partial injection, no "helpful"
+  half-related snippets that can steer the model off-topic.
+- Topic mismatch (semantic score too low and/or lexical overlap too low vs the current
+  user message) blocks injection: unrelated people, products, or themes in the vault
+  must not surface unless they clearly match the request.
+
+Implementation: rule-based, deterministic, maintainable thresholds.
 """
 
 from __future__ import annotations
@@ -14,26 +20,17 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-
-# Conservative defaults. Memory is optional; relevance is mandatory.
-MAX_INJECTED_MEMORIES_ABSOLUTE = 2
-MAX_INJECTED_MEMORIES_NON_PIVOT_DEFAULT = 1
-MAX_INJECTED_MEMORIES_PIVOT_DEFAULT = 0  # enforced by requiring HIGH relevance
-
-# Relevance thresholds: conservative, 0–1.
-# Normal: only inject when clearly relevant.
-MIN_RELEVANCE_SCORE = 0.65
-# High relevance used for allowing 2 memories.
-HIGH_RELEVANCE_SCORE = 0.80
-# When a topic reset/pivot is detected we use a stricter threshold than normal,
-# but slightly lower than HIGH_RELEVANCE_SCORE so genuinely related memories
-# still pass after keyword+semantic scoring.
-# Pivot/new-topic: drop prior-topic memories unless extremely relevant.
-PIVOT_RELEVANCE_THRESHOLD = 0.80
+# --- Strict retrieval / injection limits (single source of truth for chat) ---
+# Memory search returns at most this many candidates; injection still applies thresholding.
+MEMORY_TOP_K = 3
+# Minimum blended relevance (semantic + lexical blend) to inject a memory.
+MEMORY_RELEVANCE_THRESHOLD = 0.75
+# Lexical overlap must be non-trivial so we do not inject on pure embedding noise.
 MIN_KEYWORD_OVERLAP = 0.12
-# Explicit recall is user intent to pull prior context; allow a lower relevance bar
-# while still requiring some connection to the request.
-EXPLICIT_RECALL_MIN_SCORE = 0.35
+# When retriever semantic score is high but blended score is dragged down by vocabulary
+# mismatch, allow a slightly lower overlap floor only if blended score is still plausibly related.
+SEMANTIC_ASSISTED_OVERLAP_MIN = 0.06
+SEMANTIC_ASSISTED_COMBINED_MIN = 0.62
 
 
 _PIVOT_CUES = (
@@ -115,7 +112,6 @@ def _keyword_overlap_ratio(user_message: str, snippet: str) -> float:
     if not user_tokens or not mem_tokens:
         return 0.0
     overlap = user_tokens.intersection(mem_tokens)
-    # Normalize by the smaller side to make short, direct matches count.
     denom = max(1, min(len(user_tokens), len(mem_tokens)))
     return len(overlap) / denom
 
@@ -140,7 +136,6 @@ def detect_topic_reset(user_message: str) -> bool:
         return True
 
     tokens = _tokenize(m)
-    # Heuristic: short factual questions often represent fresh domains.
     if len(tokens) <= 9 and (
         "capital" in m
         or "population" in m
@@ -164,23 +159,63 @@ def infer_blocked_category(snippet: str) -> Optional[str]:
 
 def _memory_relevance_score(user_message: str, candidate: Dict[str, Any]) -> float:
     """
-    Combines semantic score (if provided) and cheap keyword overlap.
-    If semantic score is absent, keyword overlap dominates.
+    Combined relevance score in [0, 1]: semantic score (if provided) blended with
+    keyword overlap. Used for sorting and threshold checks.
     """
     snippet = (candidate.get("snippet") or "").strip()
     overlap = _keyword_overlap_ratio(user_message, snippet)
     sem = candidate.get("score", None)
     if isinstance(sem, (int, float)) and sem > 0:
-        # Semantic score usually already lives in ~[0,1]; keep it dominant but not exclusive.
         score = (0.65 * float(sem)) + (0.35 * overlap)
     else:
         score = overlap
-    # Clamp to [0,1] so thresholds are meaningful.
-    if score < 0:
-        return 0.0
-    if score > 1:
-        return 1.0
-    return float(score)
+    return max(0.0, min(1.0, float(score)))
+
+
+def _parse_semantic_score(candidate: Dict[str, Any]) -> Optional[float]:
+    try:
+        if candidate.get("score") is None:
+            return None
+        v = float(candidate.get("score"))
+        return v if v > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _passes_relevance_gate(
+    overlap: float,
+    sem_score: Optional[float],
+    combined_relevance: float,
+) -> bool:
+    """
+    Inclusion decision: score first, then narrow semantic-assisted path.
+
+    High-confidence memory should pass even if semantic match is imperfect to avoid
+    over-filtering useful context — but only when blended score already cleared the bar,
+    or when retriever score is high *and* there is still a minimal lexical tie + non-garbage blend.
+    """
+    if combined_relevance >= MEMORY_RELEVANCE_THRESHOLD:
+        return True
+
+    if sem_score is not None and sem_score >= MEMORY_RELEVANCE_THRESHOLD:
+        if overlap >= MIN_KEYWORD_OVERLAP:
+            return True
+        if (
+            overlap >= SEMANTIC_ASSISTED_OVERLAP_MIN
+            and combined_relevance >= SEMANTIC_ASSISTED_COMBINED_MIN
+        ):
+            return True
+
+    return False
+
+
+def _topic_mismatch(
+    overlap: float,
+    sem_score: Optional[float],
+    combined_relevance: float,
+) -> bool:
+    """True if this candidate should be rejected for topic / confidence reasons."""
+    return not _passes_relevance_gate(overlap, sem_score, combined_relevance)
 
 
 def filter_relevant_memories(
@@ -188,39 +223,40 @@ def filter_relevant_memories(
     retrieved_candidates: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Filters retrieved memories to prevent unrelated topic bleed.
+    Filter and cap long-term memories for injection.
 
-    Fail-safe rule: if relevance is uncertain, inject none.
+    - Candidates are sorted by relevance_score (desc) before gating so the strongest
+      evidence is evaluated first; at most MEMORY_TOP_K items can pass.
+    - If nothing meets the bar, return [] (answer from current input + recentTurns only).
     """
     pivot_reset = detect_topic_reset(user_message)
     explicit_recall = detect_explicit_memory_recall(user_message)
 
     retrieved_n = len(retrieved_candidates or [])
     rejected_reasons: List[Dict[str, Any]] = []
-    kept: List[Dict[str, Any]] = []
 
-    pivot_mode = bool(pivot_reset and not explicit_recall)
-
-    # Score + gate candidates.
+    # Annotate and sort by relevance_score descending before applying rules.
+    enriched: List[Dict[str, Any]] = []
     for cand in retrieved_candidates or []:
         snippet = (cand.get("snippet") or "").strip()
         if not snippet:
             continue
+        rel = _memory_relevance_score(user_message, cand)
+        row = dict(cand)
+        row["_relevance_score"] = rel
+        enriched.append(row)
+
+    enriched.sort(key=lambda c: float(c.get("_relevance_score", 0.0)), reverse=True)
+
+    kept: List[Dict[str, Any]] = []
+    for cand in enriched:
+        snippet = (cand.get("snippet") or "").strip()
+        overlap = _keyword_overlap_ratio(user_message, snippet)
+        relevance_score = float(cand.get("_relevance_score", 0.0))
+        sem_score = _parse_semantic_score(cand)
 
         blocked_category = infer_blocked_category(snippet)
-        overlap = _keyword_overlap_ratio(user_message, snippet)
-        score = _memory_relevance_score(user_message, cand)
-
-        # In pivot mode, apply thresholds against the raw semantic score when present.
-        # This prevents "combined score" (semantic+keyword blend) from over-filtering
-        # genuinely on-topic memories that are slightly below the old pivot bar.
-        sem_score: Optional[float] = None
-        try:
-            if cand.get("score") is not None:
-                sem_score = float(cand.get("score"))
-        except (TypeError, ValueError):
-            sem_score = None
-
+        # Risky categories stay out of normal turns; explicit recall is intentional retrieval.
         if blocked_category and not explicit_recall:
             rejected_reasons.append(
                 {
@@ -231,74 +267,25 @@ def filter_relevant_memories(
             )
             continue
 
-        # Guardrail: keyword overlap must be non-trivial for safe injection.
-        # If the memory looks like the right domain, overlap will be > MIN_KEYWORD_OVERLAP.
-        overlap_guard_score = score
-        if pivot_mode and sem_score is not None:
-            overlap_guard_score = sem_score
-        min_guard = EXPLICIT_RECALL_MIN_SCORE if explicit_recall else MIN_RELEVANCE_SCORE
-        if overlap < MIN_KEYWORD_OVERLAP and overlap_guard_score < min_guard:
+        if _topic_mismatch(overlap, sem_score, relevance_score):
             rejected_reasons.append(
                 {
                     "snippet_preview": snippet[:60],
-                    "reason": "low_similarity",
+                    "reason": "topic_mismatch_or_weak_memory",
                     "overlap": round(overlap, 4),
-                    "score": round(score, 4),
+                    "semantic_score": None if sem_score is None else round(sem_score, 4),
+                    "relevance_score": round(relevance_score, 4),
+                    "threshold": MEMORY_RELEVANCE_THRESHOLD,
                 }
             )
             continue
 
-        # Pivot/new-topic: default to 0 unless highly relevant.
-        if pivot_mode:
-            # Pivot means reset of unrelated context, but does not mean "drop all memory".
-            # Only keep memories that are very strongly on-topic.
-            pivot_guard_score = score
-            if sem_score is not None:
-                pivot_guard_score = sem_score
-            if pivot_guard_score < PIVOT_RELEVANCE_THRESHOLD:
-                rejected_reasons.append(
-                    {
-                        "snippet_preview": snippet[:60],
-                        "reason": "pivot_guard",
-                        "score": round(pivot_guard_score, 4),
-                        "threshold": PIVOT_RELEVANCE_THRESHOLD,
-                    }
-                )
-                continue
+        out = dict(cand)
+        out["_guard_relevance_score"] = relevance_score
+        kept.append(out)
+        if len(kept) >= MEMORY_TOP_K:
+            break
 
-        # Non-pivot normal chat: require at least minimum relevance.
-        if not pivot_mode and not explicit_recall:
-            if score < MIN_RELEVANCE_SCORE:
-                rejected_reasons.append(
-                    {
-                        "snippet_preview": snippet[:60],
-                        "reason": "low_similarity",
-                        "score": round(score, 4),
-                    }
-                )
-                continue
-        # Explicit recall: allow lower threshold (user is explicitly asking for prior content)
-        if explicit_recall and not pivot_mode:
-            if score < EXPLICIT_RECALL_MIN_SCORE and overlap < MIN_KEYWORD_OVERLAP:
-                rejected_reasons.append(
-                    {
-                        "snippet_preview": snippet[:60],
-                        "reason": "low_similarity",
-                        "score": round(score, 4),
-                        "threshold": EXPLICIT_RECALL_MIN_SCORE,
-                    }
-                )
-                continue
-
-        cand_copy = dict(cand)
-        # Sorting/capping should use the same scoring basis as pivot thresholds.
-        guard_score = score
-        if pivot_mode and sem_score is not None:
-            guard_score = sem_score
-        cand_copy["_guard_relevance_score"] = guard_score
-        kept.append(cand_copy)
-
-    # If nothing is confidently relevant, inject none.
     if not kept:
         debug = {
             "topic_reset_detected": pivot_reset,
@@ -306,37 +293,23 @@ def filter_relevant_memories(
             "memories_retrieved": retrieved_n,
             "memories_injected": 0,
             "rejected_memory_reasons": rejected_reasons,
+            "memory_relevance_threshold": MEMORY_RELEVANCE_THRESHOLD,
+            "memory_top_k": MEMORY_TOP_K,
         }
         return [], debug
 
-    kept.sort(key=lambda c: float(c.get("_guard_relevance_score", 0.0)), reverse=True)
     best_score = float(kept[0].get("_guard_relevance_score", 0.0))
-
-    if pivot_reset and not explicit_recall:
-        # Pivot means reset: inject only the most relevant ones.
-        # Allow up to 2 if the best candidate is *very* strong.
-        max_inject = 2 if best_score >= (PIVOT_RELEVANCE_THRESHOLD + 0.10) else 1
-    else:
-        # Prefer fewer memories; only inject 2 when relevance is clearly strong.
-        max_inject = (
-            MAX_INJECTED_MEMORIES_ABSOLUTE
-            if best_score >= HIGH_RELEVANCE_SCORE
-            else MAX_INJECTED_MEMORIES_NON_PIVOT_DEFAULT
-        )
-
-    injected = kept[:max_inject]
-
     debug = {
         "topic_reset_detected": pivot_reset,
         "explicit_recall_detected": explicit_recall,
         "memories_retrieved": retrieved_n,
-        "memories_injected": len(injected),
+        "memories_injected": len(kept),
         "rejected_memory_reasons": rejected_reasons,
         "best_relevance_score": round(best_score, 4),
-        "max_inject": max_inject,
-        "pivot_relevance_threshold": PIVOT_RELEVANCE_THRESHOLD if pivot_reset else None,
+        "memory_relevance_threshold": MEMORY_RELEVANCE_THRESHOLD,
+        "memory_top_k": MEMORY_TOP_K,
     }
-    return injected, debug
+    return kept, debug
 
 
 def build_memory_context_block(
@@ -362,4 +335,3 @@ def build_memory_context_block(
         "Do not introduce unrelated prior topics unless the user explicitly asks.\n\n"
     )
     return guard + "RELEVANT MEMORY:\n" + "\n".join(lines)
-
