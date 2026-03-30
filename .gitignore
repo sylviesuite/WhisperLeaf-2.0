@@ -147,4 +147,4 @@ whisperleaf.conf
 # Cursor AI
 ############################
 .cursorignore
-.cursorindexingignore
+.cursorindexingignore*.zip
