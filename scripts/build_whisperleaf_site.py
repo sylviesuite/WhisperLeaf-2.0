@@ -98,6 +98,9 @@ def main() -> None:
             if f.is_file():
                 shutil.copy2(f, dl_dst / f.name)
 
+    # Netlify: pretty URL /download -> static file (avoids 404 on SPA-less export)
+    (SITE / "_redirects").write_text("/download /download.html 200\n", encoding="utf-8")
+
     print("OK:", SITE)
 
 
