@@ -26,8 +26,8 @@ def main() -> None:
     m3 = re.search(r"<script>\s*(.*?)\s*</script>\s*</body>", landing, re.DOTALL)
     assert m3
     js = m3.group(1).strip().replace(
-        "window.location.href = '/downloads/whisperleaf-beta.zip'",
-        "window.location.href = 'downloads/whisperleaf-beta.zip'",
+        "window.location.href = '/download'",
+        "window.location.href = 'download.html'",
     )
     (SITE / "assets/js/landing.js").write_text(js + "\n", encoding="utf-8")
 
@@ -46,8 +46,10 @@ def main() -> None:
         flags=re.DOTALL,
     )
     idx = idx.replace('href="/"', 'href="index.html"')
-    idx = idx.replace('src="/static/owl.png"', 'src="assets/images/owl.png"')
+    idx = idx.replace('src="/static/assets/images/owl.png"', 'src="assets/images/owl.png"')
+    idx = idx.replace('src="/assets/images/owl.png"', 'src="assets/images/owl.png"')
     idx = idx.replace('href="/transparency"', 'href="transparency.html"')
+    idx = idx.replace('href="/download"', 'href="download.html"')
     idx = idx.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/whisperleaf-beta.zip"')
     (SITE / "index.html").write_text(idx, encoding="utf-8")
 
@@ -59,7 +61,7 @@ def main() -> None:
         flags=re.DOTALL,
     )
     tr = tr.replace('href="/"', 'href="index.html"')
-    tr = tr.replace('src="/static/owl.png"', 'src="assets/images/owl.png"')
+    tr = tr.replace('src="/assets/images/owl.png"', 'src="assets/images/owl.png"')
     tr = tr.replace('href="/transparency"', 'href="transparency.html"')
     tr = tr.replace('href="/chat"', 'href="index.html"')
     tr = tr.replace(
@@ -67,6 +69,17 @@ def main() -> None:
         'href="assets/docs/whisperleaf_energy_methodology.md"',
     )
     (SITE / "transparency.html").write_text(tr, encoding="utf-8")
+
+    dl_page = (ROOT / "templates/download.html").read_text(encoding="utf-8")
+    dl_page = dl_page.replace('href="/assets/css/landing.css"', 'href="assets/css/landing.css"')
+    dl_page = dl_page.replace('src="/static/assets/images/owl.png"', 'src="assets/images/owl.png"')
+    dl_page = dl_page.replace('src="/assets/images/owl.png"', 'src="assets/images/owl.png"')
+    dl_page = dl_page.replace('href="/transparency"', 'href="transparency.html"')
+    dl_page = dl_page.replace('href="/#how-whisperleaf-works"', 'href="index.html#how-whisperleaf-works"')
+    dl_page = dl_page.replace('href="/download"', 'href="download.html"')
+    dl_page = dl_page.replace('href="/downloads/whisperleaf-beta.zip"', 'href="downloads/whisperleaf-beta.zip"')
+    dl_page = dl_page.replace('href="/"', 'href="index.html"')
+    (SITE / "download.html").write_text(dl_page, encoding="utf-8")
 
     import shutil
 

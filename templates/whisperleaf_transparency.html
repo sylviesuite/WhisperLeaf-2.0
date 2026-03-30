@@ -63,7 +63,7 @@
     .logo-circle.small {
       width: 36px;
       height: 36px;
-      border: 2px solid #fff;
+      border: 2px solid rgba(255, 255, 255, 0.8);
       border-radius: 50%;
       overflow: hidden;
       box-sizing: border-box;
@@ -71,15 +71,7 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-    }
-
-    .logo-circle.small img {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-      flex-shrink: 0;
+      background: transparent;
     }
 
     .page-container {
@@ -103,23 +95,22 @@
     }
 
     .logo-circle {
-      width: 120px;
-      height: 120px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
-      background: #111;
-      border: 6px solid #fff;
+      border: 4px solid rgba(255, 255, 255, 0.8);
       box-sizing: border-box;
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: transparent;
     }
 
-    .logo-circle img {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
+    .owl-img {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
       display: block;
       flex-shrink: 0;
     }
@@ -317,7 +308,7 @@
     <div class="wl-header-inner">
       <a href="/" class="wl-brand">
         <div class="logo-circle small">
-          <img src="/static/owl.png" alt="WhisperLeaf owl" />
+          <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
         </div>
         WhisperLeaf
       </a>
@@ -333,7 +324,7 @@
     <header class="logo-wrap">
       <a href="/" aria-label="WhisperLeaf home">
         <div class="logo-circle">
-          <img src="/static/owl.png" alt="WhisperLeaf" />
+          <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
         </div>
       </a>
     </header>

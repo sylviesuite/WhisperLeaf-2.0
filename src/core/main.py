@@ -6,10 +6,11 @@ from pathlib import Path
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 import uuid
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Tuple
 
 import httpx
 from fastapi import (
@@ -23,7 +24,7 @@ from fastapi import (
     Query,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -34,6 +35,12 @@ from .models import Document, User
 from .vault import VaultManager
 from .vector_store import VectorStore
 from .document_processor import DocumentProcessor
+from .url_ingest import (
+    build_display_label,
+    fetch_url_text_async,
+    normalize_url_for_dedup,
+    validate_public_http_url,
+)
 from .memory_manager import MemoryManager
 from .memory_search import MemorySearch
 from .memory_models import (
@@ -81,6 +88,7 @@ from .memory import (
 )
 from .tools_registry import register_tool, list_tools, call_tool
 from .tools import tool_bus, register_memory_search_tool, register_docs_search_tool, register_system_status_tool
+from .watch_folder_service import WatchFolderController
 
 # -------------------------------------------------------------------
 # FastAPI app + middleware
@@ -116,9 +124,27 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = PROJECT_ROOT / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+
+@app.get("/owl.png")
+async def serve_root_owl_png():
+    """Serve owl.png at site root (matches Signal Board / marketing img src)."""
+    path = STATIC_DIR / "owl.png"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/png")
+
 DOWNLOADS_DIR = STATIC_DIR / "downloads"
 if DOWNLOADS_DIR.is_dir():
     app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
+
+# Marketing CSS/images (/assets/...) — prefer static/assets (beta/self-contained), else whisperleaf-site build output
+_assets_static = STATIC_DIR / "assets"
+_assets_site = PROJECT_ROOT / "whisperleaf-site" / "assets"
+ASSETS_DIR = _assets_static if _assets_static.is_dir() else (
+    _assets_site if _assets_site.is_dir() else None
+)
+if ASSETS_DIR is not None:
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 # Benchmarks dir – methodology and benchmark docs (e.g. /benchmarks/whisperleaf_energy_methodology.md)
 BENCHMARKS_DIR = PROJECT_ROOT / "benchmarks"
@@ -496,14 +522,14 @@ async def api_model_status():
 @app.get("/", response_class=HTMLResponse)
 async def landing(request: Request):
     """Marketing landing page."""
-    return templates.TemplateResponse("landing.html", {"request": request})
+    return templates.TemplateResponse(request, "landing.html")
 
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_splash(request: Request):
     """Minimal owl splash entry page."""
     # Existing minimal owl splash template
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -512,8 +538,9 @@ async def chat(request: Request):
     """Main chat UI."""
     # Use the real chat template filename
     return templates.TemplateResponse(
+        request,
         "whisperleaf_chat.html",
-        {"request": request, "app_name": "WhisperLeaf"},
+        {"app_name": "WhisperLeaf"},
     )
 
 
@@ -522,9 +549,16 @@ async def transparency(request: Request):
     """Transparency and benchmark page."""
     # Use the real transparency template filename
     return templates.TemplateResponse(
+        request,
         "whisperleaf_transparency.html",
-        {"request": request},
     )
+
+
+@app.get("/download", response_class=HTMLResponse)
+async def download_beta(request: Request):
+    """Beta download instructions and zip link (marketing page)."""
+    return templates.TemplateResponse(request, "download.html")
+
 
 # -------------------------------------------------------------------
 # Memory-backed chat endpoint
@@ -2271,6 +2305,171 @@ def _save_documents_index(index: Dict[str, Any]) -> None:
         json.dump(index, f, indent=2)
 
 
+def _document_stored_path(document_id: str, meta: Dict[str, Any]) -> Path:
+    filename = meta.get("filename", "")
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._- ") or "doc"
+    return DOCUMENTS_DIR / f"{document_id}_{safe_name}"
+
+
+def _document_meta_for_api(doc_id: str, meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Omit underscore-prefixed keys (e.g. dedup) from API responses."""
+    out: Dict[str, Any] = {"id": doc_id}
+    for k, v in meta.items():
+        if str(k).startswith("_"):
+            continue
+        out[k] = v
+    return out
+
+
+def _reindex_single_document(doc_id: str, meta: Dict[str, Any]) -> Optional[int]:
+    """Rebuild vector chunks for one indexed file. Returns new chunk count or None if skipped."""
+    path = _document_stored_path(doc_id, meta)
+    if not path.exists():
+        return None
+    processed = document_processor.process_document(str(path))
+    if processed["processing_status"] != "success":
+        return None
+    chunks = processed.get("chunks") or []
+    if not chunks and processed.get("text", "").strip():
+        chunks = [processed["text"].strip()[:10000]]
+    title_for_vector = (
+        (meta.get("display_label") or meta.get("title") or meta.get("filename") or doc_id).strip()[:200]
+    )
+    filename = meta.get("filename", "")
+    source = str(meta.get("source", "upload"))
+    vector_store.remove_document(doc_id)
+    vector_store.add_chunks(
+        document_id=doc_id,
+        chunks=chunks,
+        metadata={"title": title_for_vector, "filename": filename, "source": source},
+    )
+    return len(chunks)
+
+
+WATCH_FOLDER_STATE_PATH = DATA_DIR / "watch_folder_state.json"
+
+
+def _shorten_watch_display(path: str, max_len: int = 40) -> str:
+    if not path:
+        return ""
+    p = path.replace("\\", "/")
+    if len(p) <= max_len:
+        return p
+    parts = [x for x in p.split("/") if x]
+    if len(parts) >= 2:
+        tail = "/".join(parts[-2:])
+        if len(tail) + 2 <= max_len:
+            return "…/" + tail
+    return "…" + p[-(max_len - 1) :]
+
+
+def _persist_watch_folder_state(path: Optional[str]) -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if path:
+            WATCH_FOLDER_STATE_PATH.write_text(json.dumps({"path": path}), encoding="utf-8")
+        else:
+            WATCH_FOLDER_STATE_PATH.unlink(missing_ok=True)
+    except Exception as e:
+        print("[watch-folder] persist state: %s" % e)
+
+
+def _watch_sync_file(root: Path, abs_path: Path) -> bool:
+    """Upsert one watched file into the session index (local copy + embeddings). Returns True if index changed."""
+    if not abs_path.is_file():
+        return False
+    try:
+        rel = abs_path.relative_to(root).as_posix()
+    except ValueError:
+        return False
+    ext = abs_path.suffix.lower()
+    if ext not in document_processor.get_supported_types():
+        return False
+    try:
+        st = abs_path.stat()
+    except OSError:
+        return False
+
+    index = _load_documents_index()
+    doc_id_existing: Optional[str] = None
+    for did, m in index.items():
+        if m.get("source") == "watch" and m.get("_watch_rel") == rel:
+            doc_id_existing = did
+            break
+
+    if doc_id_existing:
+        meta = index[doc_id_existing]
+        if meta.get("_watch_mtime") == st.st_mtime and meta.get("_watch_size") == st.st_size:
+            return False
+        doc_id = doc_id_existing
+        stored_path = _document_stored_path(doc_id, meta)
+        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(abs_path, stored_path)
+        except Exception as e:
+            print("[watch-folder] copy failed: %s" % e)
+            return False
+        n = _reindex_single_document(doc_id, meta)
+        if n is None:
+            return False
+        meta["chunks_count"] = n
+        meta["_watch_mtime"] = st.st_mtime
+        meta["_watch_size"] = st.st_size
+        _save_documents_index(index)
+        return True
+
+    doc_id = str(uuid.uuid4())
+    filename = abs_path.name
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._- ") or "doc"
+    stored_path = DOCUMENTS_DIR / f"{doc_id}_{safe_name}"
+    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(abs_path, stored_path)
+    except Exception as e:
+        print("[watch-folder] new copy failed: %s" % e)
+        return False
+    processed = document_processor.process_document(str(stored_path))
+    if processed["processing_status"] != "success":
+        stored_path.unlink(missing_ok=True)
+        return False
+    chunks = processed.get("chunks") or []
+    if not chunks and processed.get("text", "").strip():
+        chunks = [processed["text"].strip()[:10000]]
+    title_str = filename
+    vector_store.add_chunks(
+        document_id=doc_id,
+        chunks=chunks,
+        metadata={"title": title_str, "filename": filename, "source": "watch"},
+    )
+    index[doc_id] = {
+        "title": title_str,
+        "display_label": rel,
+        "filename": filename,
+        "chunks_count": len(chunks),
+        "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "watch",
+        "_watch_rel": rel,
+        "_watch_mtime": st.st_mtime,
+        "_watch_size": st.st_size,
+    }
+    _save_documents_index(index)
+    return True
+
+
+watch_folder_controller = WatchFolderController(
+    sync_file=_watch_sync_file,
+    is_supported=lambda p: p.suffix.lower() in set(document_processor.get_supported_types()),
+)
+
+
+class FetchUrlBody(BaseModel):
+    url: str
+
+
+class WatchFolderStartBody(BaseModel):
+    path: str
+
+
 @app.post("/api/documents/upload")
 async def upload_document_ingest(
     file: UploadFile = File(...),
@@ -2305,14 +2504,16 @@ async def upload_document_ingest(
         vector_store.add_chunks(
             document_id=doc_id,
             chunks=chunks,
-            metadata={"title": title_str, "filename": filename},
+            metadata={"title": title_str, "filename": filename, "source": "file"},
         )
         index = _load_documents_index()
         index[doc_id] = {
             "title": title_str,
+            "display_label": title_str,
             "filename": filename,
             "chunks_count": len(chunks),
             "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "source": "file",
         }
         _save_documents_index(index)
         return {
@@ -2328,13 +2529,120 @@ async def upload_document_ingest(
         raise HTTPException(status_code=500, detail="Ingestion failed: %s" % e)
 
 
+@app.post("/api/documents/fetch-url")
+async def fetch_url_document(body: FetchUrlBody):
+    """User-triggered fetch: download page, extract text, chunk, index like an upload."""
+    url = (body.url or "").strip()
+    ok, err = validate_public_http_url(url)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err)
+
+    normalized = normalize_url_for_dedup(url)
+    index_pre = _load_documents_index()
+    for did, m in index_pre.items():
+        if m.get("source") == "url" and m.get("_url_key") == normalized:
+            return {
+                "duplicate": True,
+                "id": did,
+                "title": m.get("title"),
+                "display_label": m.get("display_label") or m.get("title"),
+            }
+
+    try:
+        plain, page_title = await fetch_url_text_async(url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not fetch this page.")
+
+    DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    doc_id = str(uuid.uuid4())
+    stored_name = "webpage.txt"
+    stored_path = DOCUMENTS_DIR / f"{doc_id}_{stored_name}"
+    try:
+        stored_path.write_text(plain, encoding="utf-8")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Could not save content.")
+
+    processed = document_processor.process_document(str(stored_path))
+    if processed["processing_status"] != "success":
+        stored_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Could not fetch this page.")
+
+    chunks = processed.get("chunks") or []
+    if not chunks and processed.get("text", "").strip():
+        chunks = [processed["text"].strip()[:10000]]
+
+    display_label = build_display_label(page_title, url)
+    title_str = ((page_title or "").strip()[:200] or display_label[:200])
+    vector_store.add_chunks(
+        document_id=doc_id,
+        chunks=chunks,
+        metadata={
+            "title": display_label[:200],
+            "filename": stored_name,
+            "source": "url",
+        },
+    )
+    index = _load_documents_index()
+    index[doc_id] = {
+        "title": title_str,
+        "display_label": display_label,
+        "filename": stored_name,
+        "chunks_count": len(chunks),
+        "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "url",
+        "_url_key": normalized,
+    }
+    _save_documents_index(index)
+    return {
+        "id": doc_id,
+        "title": title_str,
+        "display_label": display_label,
+        "chunks_count": len(chunks),
+        "word_count": processed.get("word_count", 0),
+    }
+
+
+@app.post("/api/documents/reindex")
+async def reindex_documents():
+    """Rebuild vector embeddings from on-disk files for all indexed documents (local only)."""
+    index = _load_documents_index()
+    updated = 0
+    skipped = 0
+    for doc_id, meta in list(index.items()):
+        n = _reindex_single_document(doc_id, meta)
+        if n is None:
+            skipped += 1
+            continue
+        index[doc_id]["chunks_count"] = n
+        updated += 1
+    _save_documents_index(index)
+    return {"ok": True, "updated": updated, "skipped": skipped}
+
+
+@app.post("/api/documents/{document_id}/reindex")
+async def reindex_one_document(document_id: str):
+    """Rebuild embeddings for a single source (user-triggered, local only)."""
+    index = _load_documents_index()
+    if document_id not in index:
+        raise HTTPException(status_code=404, detail="Source not found")
+    meta = index[document_id]
+    n = _reindex_single_document(document_id, meta)
+    if n is None:
+        raise HTTPException(status_code=400, detail="Could not update this source.")
+    index[document_id]["chunks_count"] = n
+    _save_documents_index(index)
+    return {"ok": True, "chunks_count": n}
+
+
 @app.get("/api/documents")
 async def list_ingested_documents():
     """List ingested documents (from index)."""
     index = _load_documents_index()
     return {
         "documents": [
-            {"id": doc_id, **meta}
+            _document_meta_for_api(doc_id, meta)
             for doc_id, meta in index.items()
         ]
     }
@@ -2348,9 +2656,7 @@ async def delete_ingested_document(document_id: str):
         raise HTTPException(status_code=404, detail="Document not found")
     meta = index[document_id]
     vector_store.remove_document(document_id)
-    filename = meta.get("filename", "")
-    safe_name = "".join(c for c in filename if c.isalnum() or c in "._- ") or "doc"
-    stored_path = DOCUMENTS_DIR / f"{document_id}_{safe_name}"
+    stored_path = _document_stored_path(document_id, meta)
     if stored_path.exists():
         try:
             stored_path.unlink()
@@ -2359,6 +2665,153 @@ async def delete_ingested_document(document_id: str):
     del index[document_id]
     _save_documents_index(index)
     return {"ok": True, "id": document_id}
+
+
+def _watch_folder_consume_stale_if_invalid() -> Tuple[bool, str]:
+    """If state file points at a missing or unusable path, return (True, raw path) and drop the state file."""
+    if not WATCH_FOLDER_STATE_PATH.exists():
+        return False, ""
+    try:
+        data = json.loads(WATCH_FOLDER_STATE_PATH.read_text(encoding="utf-8"))
+        raw = (data or {}).get("path") or ""
+        if not raw:
+            return False, ""
+        try:
+            rp = Path(str(raw)).expanduser().resolve()
+            if rp.is_dir():
+                return False, ""
+        except Exception:
+            pass
+        try:
+            WATCH_FOLDER_STATE_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return True, str(raw)
+    except Exception:
+        return False, ""
+
+
+@app.get("/api/watch-folder")
+def get_watch_folder_status(consume_feedback: bool = Query(False)):
+    """Local folder watch status; optional consume_feedback=true clears one-shot UI message."""
+    snap = watch_folder_controller.snapshot()
+    watching = bool(snap.get("watching"))
+    path = str(snap.get("path") or "")
+    path_invalid = False
+    if not watching:
+        inv, stale = _watch_folder_consume_stale_if_invalid()
+        if inv:
+            path_invalid = True
+            path = stale
+    fb = (
+        watch_folder_controller.take_feedback()
+        if consume_feedback
+        else watch_folder_controller.peek_feedback()
+    )
+    return {
+        "watching": watching,
+        "path": path,
+        "path_short": _shorten_watch_display(path) if path else "",
+        "path_invalid": path_invalid,
+        "feedback": fb,
+    }
+
+
+@app.post("/api/watch-folder/start")
+async def watch_folder_start(body: WatchFolderStartBody):
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Path is required")
+    try:
+        root = Path(raw).expanduser().resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not root.is_dir():
+        raise HTTPException(status_code=400, detail="Folder not found")
+    try:
+        with os.scandir(str(root)) as it:
+            next(it, None)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Cannot access this folder")
+    except OSError as e:
+        errno = getattr(e, "errno", None)
+        winerror = getattr(e, "winerror", None)
+        if errno in (13, 1) or winerror == 5:
+            raise HTTPException(status_code=403, detail="Cannot access this folder")
+    ok, err = watch_folder_controller.start(root)
+    if not ok:
+        detail = err or "Could not start watching"
+        low = str(detail).lower()
+        if "permission" in low or "access" in low or "denied" in low:
+            detail = "Cannot access this folder"
+        raise HTTPException(status_code=503, detail=detail)
+    _persist_watch_folder_state(str(root))
+    p = str(root)
+    return {"ok": True, "path": p, "path_short": _shorten_watch_display(p)}
+
+
+@app.post("/api/watch-folder/stop")
+def watch_folder_stop():
+    watch_folder_controller.stop()
+    _persist_watch_folder_state(None)
+    return {"ok": True}
+
+
+@app.post("/api/watch-folder/browse")
+async def watch_folder_browse():
+    """Optional native folder dialog (tkinter); same machine as the server only."""
+
+    def pick() -> str:
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            r = tk.Tk()
+            r.withdraw()
+            try:
+                r.attributes("-topmost", True)
+            except Exception:
+                pass
+            p = filedialog.askdirectory()
+            r.destroy()
+            return (p or "").strip()
+        except Exception:
+            return ""
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    path = await loop.run_in_executor(None, pick)
+    if not path:
+        return {"ok": False, "path": None}
+    return {"ok": True, "path": path}
+
+
+@app.on_event("startup")
+async def _wl_restore_watch_folder():
+    if not WATCH_FOLDER_STATE_PATH.exists():
+        return
+    try:
+        data = json.loads(WATCH_FOLDER_STATE_PATH.read_text(encoding="utf-8"))
+        p = (data or {}).get("path") or ""
+        if not p:
+            return
+        root = Path(str(p)).expanduser().resolve()
+        if root.is_dir():
+            ok, err = watch_folder_controller.start(root)
+            if ok:
+                print("[watch-folder] restored: %s" % root)
+            else:
+                print("[watch-folder] restore failed: %s" % err)
+                _persist_watch_folder_state(None)
+        else:
+            _persist_watch_folder_state(None)
+    except Exception as e:
+        print("[watch-folder] restore error: %s" % e)
+        try:
+            _persist_watch_folder_state(None)
+        except Exception:
+            pass
 
 
 # -------------------------------------------------------------------

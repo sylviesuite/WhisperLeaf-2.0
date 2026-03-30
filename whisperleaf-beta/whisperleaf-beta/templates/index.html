@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhisperLeaf</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: linear-gradient(160deg,#0f1419 0%,#1a2332 40%,#0d1117 100%);
+  color: #e6edf3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  transition: opacity 0.25s ease;
+}
+
+.landing-owl {
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.landing-owl:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 25px rgba(120,180,255,0.45));
+}
+
+/* Outer ring: CSS-only, crisp circle; owl artwork unchanged inside */
+.logo-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #111 url("/assets/images/owl.png") center center / cover no-repeat;
+  border: 6px solid #fff;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Overscale so dark badge in PNG reaches circle edge; container crops excess */
+.logo-circle img {
+  width: 135%;
+  height: 135%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes owlPulse {
+  0% {
+    filter: drop-shadow(0 0 10px rgba(120,180,255,0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 25px rgba(120,180,255,0.55));
+    transform: scale(1.03);
+  }
+  100% {
+    filter: drop-shadow(0 0 10px rgba(120,180,255,0.2));
+    transform: scale(1);
+  }
+}
+
+.owl-thinking {
+  animation: owlPulse 2s ease-in-out infinite;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin: 0.25rem 0 0.5rem 0;
+  letter-spacing: .5px;
+}
+
+p {
+  color: #8b949e;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.landing-nav {
+  margin-top: 1.25rem;
+}
+
+.landing-nav a {
+  color: #8b949e;
+  text-decoration: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.landing-nav a:hover {
+  color: #e6edf3;
+  text-decoration: underline;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="landing-owl" id="landingOwl" role="button" aria-label="Start WhisperLeaf session">
+  <div class="logo-circle">
+    <img src="/assets/images/owl.png" alt="WhisperLeaf owl" class="owl-icon">
+  </div>
+</div>
+
+<h1>WhisperLeaf</h1>
+<p>A private AI workspace that runs entirely on your device—no cloud, no tracking, no compromises.</p>
+<nav class="landing-nav" aria-label="WhisperLeaf navigation">
+  <a href="/transparency">Transparency</a>
+</nav>
+
+<script>
+
+const owl = document.getElementById("landingOwl");
+
+if (owl) {
+  owl.addEventListener("click", () => {
+    document.body.style.opacity = "0";
+    setTimeout(() => {
+      window.location.href = "/chat";
+    }, 250);
+  });
+}
+
+</script>
+
+</body>
+</html>

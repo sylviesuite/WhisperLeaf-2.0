@@ -37,26 +37,23 @@ body {
   filter: drop-shadow(0 0 25px rgba(120,180,255,0.45));
 }
 
-/* Outer ring: CSS-only, crisp circle; owl artwork unchanged inside */
 .logo-circle {
-  width: 120px;
-  height: 120px;
+  width: 140px;
+  height: 140px;
   border-radius: 50%;
-  background: #111;
-  border: 6px solid #fff;
-  box-sizing: border-box;
-  overflow: hidden;
+  border: 4px solid rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-/* Overscale so dark badge in PNG reaches circle edge; container crops excess */
-.logo-circle img {
-  width: 135%;
-  height: 135%;
-  object-fit: cover;
-  object-position: center;
+.owl-img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
   display: block;
   flex-shrink: 0;
 }
@@ -116,7 +113,7 @@ p {
 
 <div class="landing-owl" id="landingOwl" role="button" aria-label="Start WhisperLeaf session">
   <div class="logo-circle">
-    <img src="/static/owl.png" alt="WhisperLeaf owl" class="owl-icon">
+    <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img">
   </div>
 </div>
 

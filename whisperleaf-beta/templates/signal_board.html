@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WhisperLeaf Signal Board</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0b0b0b;
+      color: #c9d1d9;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 3.5rem;
+    }
+    .header-block {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .header-block .logo-circle {
+      margin: 0 auto 1rem;
+    }
+    .header-block h1 {
+      margin: 0 0 0.65rem;
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: #e6edf3;
+      letter-spacing: 0.02em;
+    }
+    .header-block .sub {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+      color: #9da7b2;
+      max-width: 32rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .header-block .trust {
+      margin: 0;
+      font-size: 0.78rem;
+      color: #6e7681;
+      line-height: 1.45;
+    }
+    h2 {
+      margin: 0 0 1rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+    }
+    .posts {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 2.75rem;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 1.1rem 1.15rem;
+    }
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .card-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+    .card-meta {
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      color: #6e7681;
+    }
+    .card-tag {
+      display: inline-block;
+      margin: 0 0 0.5rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #7eb89a;
+      background: rgba(126, 184, 154, 0.12);
+      border: 1px solid rgba(126, 184, 154, 0.25);
+      border-radius: 4px;
+      padding: 0.2rem 0.45rem;
+    }
+    .card-desc {
+      margin: 0;
+      font-size: 0.88rem;
+      color: #9da7b2;
+      line-height: 1.55;
+    }
+    .section {
+      margin-bottom: 2.5rem;
+    }
+    .submit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 1.25rem 1.15rem;
+    }
+    .submit-box p.lead {
+      margin: 0 0 1rem;
+      font-size: 0.82rem;
+      color: #8b949e;
+      line-height: 1.45;
+    }
+    label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #8b949e;
+      margin-bottom: 0.35rem;
+    }
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      margin-bottom: 0.9rem;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: #e6edf3;
+      background: #111;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 6px;
+    }
+    textarea {
+      min-height: 5.5rem;
+      resize: vertical;
+    }
+    input::placeholder,
+    textarea::placeholder {
+      color: #6e7681;
+    }
+    .btn-submit {
+      display: inline-block;
+      margin-top: 0.25rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #0b0b0b;
+      background: #c9d1d9;
+      border: none;
+      border-radius: 6px;
+      cursor: default;
+    }
+    .guardrails {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 1rem 1.15rem;
+    }
+    .guardrails ul {
+      margin: 0;
+      padding-left: 1.05rem;
+      font-size: 0.84rem;
+      color: #9da7b2;
+      line-height: 1.6;
+    }
+    .guardrails li {
+      margin: 0.35rem 0;
+    }
+
+    .logo-circle {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .owl-img {
+      width: 70%;
+      height: 70%;
+      object-fit: contain;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .header-block .logo-circle {
+      width: 56px;
+      height: 56px;
+      border-width: 3px;
+      margin: 0 auto 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="header-block">
+      <div class="logo-circle">
+        <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
+      </div>
+      <h1>WhisperLeaf Signal Board</h1>
+      <p class="sub">A quiet place where people share what they&apos;ve done with WhisperLeaf.</p>
+      <p class="trust">WhisperLeaf never sends your data here automatically.</p>
+    </header>
+
+    <section class="section" aria-labelledby="posts-heading">
+      <h2 id="posts-heading">Examples</h2>
+      <div class="posts">
+        <article class="card">
+          <div class="card-top">
+            <span class="card-tag">Documents</span>
+            <span class="card-meta">Mar 12, 2026</span>
+          </div>
+          <h3 class="card-title">Summaries without leaving the machine</h3>
+          <p class="card-desc">
+            I pointed WhisperLeaf at a folder of notes and asked for a one-page summary before a review.
+            Everything stayed local. I didn&apos;t have to pick a cloud provider or read another privacy policy.
+          </p>
+        </article>
+        <article class="card">
+          <div class="card-top">
+            <span class="card-tag">Workflow</span>
+            <span class="card-meta">Mar 8, 2026</span>
+          </div>
+          <h3 class="card-title">Morning planning, offline</h3>
+          <p class="card-desc">
+            I use WhisperLeaf on the train with no Wi‑Fi to turn rough bullets into a clear plan for the day.
+            It feels like a notebook that thinks with me—without sending anything out.
+          </p>
+        </article>
+        <article class="card">
+          <div class="card-top">
+            <span class="card-tag">Documents</span>
+            <span class="card-meta">Mar 3, 2026</span>
+          </div>
+          <h3 class="card-title">Draft feedback in the same room as the draft</h3>
+          <p class="card-desc">
+            I pasted a draft spec and asked for gaps and risks. The answers referenced only what I had given it.
+            That boundary mattered for a client who cares about confidentiality.
+          </p>
+        </article>
+        <article class="card">
+          <div class="card-top">
+            <span class="card-tag">Workflow</span>
+            <span class="card-meta">Feb 26, 2026</span>
+          </div>
+          <h3 class="card-title">Watched folder for a research log</h3>
+          <p class="card-desc">
+            I set WhisperLeaf to watch a small folder of markdown files. When I edited a file, the session picked up
+            changes without me re-uploading. Small thing, but it kept me in flow.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="submit-heading">
+      <h2 id="submit-heading">Share your story</h2>
+      <div class="submit-box">
+        <p class="lead">You send it. We review it. We decide what goes live.</p>
+        <form action="#" method="get" aria-label="Submit for review">
+          <label for="sb-title">Title</label>
+          <input id="sb-title" name="title" type="text" autocomplete="off" placeholder="Short headline" />
+
+          <label for="sb-desc">Description</label>
+          <textarea id="sb-desc" name="description" placeholder="Two or three lines about what you did with WhisperLeaf."></textarea>
+
+          <label for="sb-email">Email (optional)</label>
+          <input id="sb-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
+
+          <button type="button" class="btn-submit">Submit for review</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="guardrails-heading">
+      <h2 id="guardrails-heading">How this works</h2>
+      <div class="guardrails">
+        <ul>
+          <li>No accounts</li>
+          <li>No comments or likes</li>
+          <li>Manual review</li>
+          <li>Separate from the app</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

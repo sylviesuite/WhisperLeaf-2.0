@@ -1,10 +1,9 @@
-<<<<<<< HEAD
 # WhisperLeaf 🌿
 
 **Sovereign Emotional AI Companion**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![Status: Production Ready](https://img.shields.io/badge/status-production%20ready-green.svg)](https://github.com/sylviesuite/WhisperLeaf)
 [![Privacy: 100% Local](https://img.shields.io/badge/privacy-100%25%20local-brightgreen.svg)](https://github.com/sylviesuite/WhisperLeaf/blob/main/docs/PRIVACY.md)
 [![Tests: Passing](https://img.shields.io/badge/tests-100%25%20passing-brightgreen.svg)](https://github.com/sylviesuite/WhisperLeaf/tree/main/tests)
@@ -246,7 +245,7 @@ Please read our [Contributing Guidelines](CONTRIBUTING.md) for detailed informat
 
 ## 📊 System Requirements
 
-- **Python 3.11+**
+- **Python 3.11** (recommended). Python **3.13** may cause runtime errors; use 3.11.x (or 3.12.x) for a stable setup.
 - **2GB RAM minimum** (4GB recommended)
 - **1GB disk space** for installation
 - **Linux, macOS, or Windows** (Linux recommended)
@@ -308,7 +307,3 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 *Built with ❤️ for privacy, transparency, and human dignity*
 
-=======
-# WhisperLeaf-2.0
-Privacy-first local AI assistant designed for sovereign computing. Runs locally, protects user data, and enables independent AI interaction without cloud dependence.
->>>>>>> dd113408d82d5f82951f6f512fc3ed2b0dd5391b

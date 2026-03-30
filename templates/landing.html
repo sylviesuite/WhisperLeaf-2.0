@@ -70,26 +70,26 @@
       color: #e6edf3;
     }
 
-    /* Logo circle (reuse shape from app) */
+    /* Logo circle — single <img class="owl-img">, no background-image */
     .logo-circle {
-      width: 120px;
-      height: 120px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
-      background: #111;
-      border: 6px solid #fff;
-      box-sizing: border-box;
-      overflow: hidden;
+      border: 4px solid rgba(255, 255, 255, 0.8);
       display: flex;
       align-items: center;
       justify-content: center;
+      background: transparent;
+      box-sizing: border-box;
+      overflow: hidden;
     }
 
-    .logo-circle img {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
+    .owl-img {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
       display: block;
+      flex-shrink: 0;
     }
 
     .logo-circle.small {
@@ -255,6 +255,12 @@
       background: radial-gradient(circle, rgba(88, 166, 255, 0.35), transparent 65%);
       filter: blur(10px);
       opacity: 0.9;
+      z-index: 0;
+    }
+
+    .hero-orbit .logo-circle {
+      position: relative;
+      z-index: 1;
     }
 
     .hero-panel {
@@ -692,7 +698,7 @@
       border: 2px solid rgba(255, 255, 255, 0.85);
       box-sizing: border-box;
       overflow: hidden;
-      background: #111;
+      background: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -714,12 +720,10 @@
       transition-duration: 0.12s;
     }
 
-    .final-cta-owl-button img {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
+    .final-cta-owl-button .owl-img {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
     }
 
     .final-cta-owl-label {
@@ -887,6 +891,99 @@
         margin-top: 40px;
       }
     }
+
+    /* Download page */
+    .download-page {
+      max-width: 520px;
+      width: 100%;
+      margin: 2rem auto 3rem;
+      text-align: center;
+    }
+
+    .download-page-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .download-page-logo {
+      width: 88px;
+      height: 88px;
+      border-width: 3px;
+    }
+
+    .download-page-title {
+      margin: 0;
+      font-size: clamp(1.5rem, 4vw, 1.85rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: #e6edf3;
+    }
+
+    .download-lead {
+      margin: 0 0 1.75rem;
+      font-size: 0.98rem;
+      line-height: 1.55;
+      color: #8b949e;
+    }
+
+    .download-status {
+      text-align: left;
+      padding: 1.25rem 1.35rem;
+      border-radius: 12px;
+      background: rgba(17, 24, 39, 0.85);
+      border: 1px solid rgba(88, 166, 255, 0.22);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      margin-bottom: 2rem;
+    }
+
+    .download-status-heading {
+      margin: 0 0 0.45rem 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+
+    .download-status-text {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #8b949e;
+    }
+
+    .download-reqs {
+      text-align: left;
+      margin-bottom: 1.75rem;
+    }
+
+    .download-reqs .section-subtitle {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    .download-reqs-list {
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 22rem;
+    }
+
+    .download-cta-wrap {
+      margin-bottom: 1.5rem;
+    }
+
+    .download-footnote {
+      margin: 0 0 2rem;
+      font-size: 0.82rem;
+      color: #6e7681;
+      line-height: 1.5;
+    }
+
+    .download-back {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -894,14 +991,14 @@
     <div class="wl-header-inner">
       <a href="/" class="wl-brand">
         <div class="logo-circle small">
-          <img src="/static/owl.png" alt="WhisperLeaf owl" />
+          <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
         </div>
         <span>WhisperLeaf</span>
       </a>
       <nav class="wl-nav">
         <a href="/transparency">Transparency</a>
         <a href="#how-whisperleaf-works">Beta</a>
-        <a href="/downloads/whisperleaf-beta.zip" download>Download Beta</a>
+        <a href="/download">Download Beta</a>
       </nav>
     </div>
   </header>
@@ -921,7 +1018,7 @@
         <p class="hero-trust-anchor">Built for AI sovereignty — your thoughts never leave your machine.</p>
         <div>
           <div class="hero-ctas">
-            <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Download Beta</a>
+            <a href="/download" class="btn btn-primary">Download Beta</a>
             <button type="button" id="seeHowBtn" class="btn btn-ghost">See how it works</button>
           </div>
           <p class="hero-beta-explain">
@@ -943,7 +1040,7 @@
         <div class="hero-orbit">
           <div class="hero-glow"></div>
           <div class="logo-circle">
-            <img src="/static/owl.png" alt="" />
+            <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
           </div>
         </div>
         <div class="hero-panel">
@@ -989,7 +1086,7 @@
           <h3>Step 1 — Download</h3>
           <p>Install WhisperLeaf on your computer.</p>
           <div class="beta-step-download-wrap">
-            <a href="/downloads/whisperleaf-beta.zip" download class="beta-download-btn">Download Beta</a>
+            <a href="/download" class="beta-download-btn">Download Beta</a>
           </div>
         </article>
         <article class="how-card">
@@ -1047,7 +1144,7 @@
         A private workflow from input to insight — without sending your work to the cloud.
       </p>
       <div class="guided-demo-cta">
-        <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Download Beta</a>
+        <a href="/download" class="btn btn-primary">Download Beta</a>
         <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
       </div>
     </section>
@@ -1127,12 +1224,12 @@
         Keep your ideas, documents, and research where they belong — on your own machine.
       </p>
       <div class="final-cta-actions">
-        <a href="/downloads/whisperleaf-beta.zip" download class="btn btn-primary">Download Beta</a>
+        <a href="/download" class="btn btn-primary">Download Beta</a>
         <a href="/transparency" class="btn-link-ghost">Review Transparency</a>
       </div>
-      <a href="/downloads/whisperleaf-beta.zip" download class="final-cta-owl" id="finalCtaOwl" aria-label="Download Beta — WhisperLeaf installer">
+      <a href="/download" class="final-cta-owl" id="finalCtaOwl" aria-label="Download Beta — WhisperLeaf installer">
         <div class="final-cta-owl-button">
-          <img src="/static/owl.png" alt="WhisperLeaf owl" />
+          <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
         </div>
         <div class="final-cta-owl-label">Download Beta</div>
       </a>
@@ -1175,7 +1272,7 @@
         e.preventDefault();
         var btn = el.querySelector('.final-cta-owl-button');
         if (btn) btn.classList.add('owl-cta-clicked');
-        setTimeout(function () { window.location.href = '/downloads/whisperleaf-beta.zip'; }, 120);
+        setTimeout(function () { window.location.href = '/download'; }, 120);
       });
     })();
 

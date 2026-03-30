@@ -1,0 +1,333 @@
+# WhisperLeaf Constitutional AI Rules Template
+# Copy this file to constitutional_rules.yaml and customize for your preferences
+
+# Constitutional AI Framework Configuration
+constitutional_ai:
+  version: "1.0"
+  enabled: true
+  strict_mode: true
+  audit_enabled: true
+  
+# Core Constitutional Rules
+rules:
+  # Rule 1: Privacy Protection (Highest Priority)
+  - name: "Privacy Protection"
+    id: "privacy_001"
+    priority: 1
+    enabled: true
+    description: "Protect user privacy and prevent unauthorized data sharing"
+    
+    conditions:
+      - action_type: "data_export"
+        external_recipient: true
+        user_consent: false
+      - action_type: "data_sharing"
+        anonymized: false
+      - action_type: "external_api_call"
+        contains_personal_data: true
+    
+    decision: "deny"
+    
+    exceptions:
+      - condition: "life_threatening_emergency"
+        override_allowed: true
+        audit_required: true
+      - condition: "explicit_user_consent"
+        override_allowed: true
+        confirmation_required: true
+    
+    enforcement:
+      - block_action: true
+      - log_violation: true
+      - notify_user: true
+      - escalate_to_human: false
+
+  # Rule 2: Emotional Safety (Highest Priority)
+  - name: "Emotional Safety"
+    id: "emotional_001"
+    priority: 1
+    enabled: true
+    description: "Prioritize user emotional well-being and safety"
+    
+    conditions:
+      - emotional_state: "crisis"
+        risk_level: "high"
+      - content_type: "harmful_advice"
+      - response_type: "dismissive"
+        user_emotional_state: "vulnerable"
+    
+    decision: "modify_or_deny"
+    
+    actions:
+      - provide_crisis_resources: true
+      - escalate_to_emergency_contacts: true
+      - modify_response_tone: "supportive"
+      - suggest_professional_help: true
+    
+    enforcement:
+      - override_normal_response: true
+      - activate_crisis_protocol: true
+      - log_intervention: true
+      - follow_up_required: true
+
+  # Rule 3: Crisis Response (Highest Priority)
+  - name: "Crisis Response"
+    id: "crisis_001"
+    priority: 1
+    enabled: true
+    description: "Provide appropriate crisis intervention and support"
+    
+    conditions:
+      - crisis_indicators: ["suicide", "self_harm", "violence"]
+      - risk_assessment: "immediate_danger"
+      - emotional_state: "severe_distress"
+    
+    decision: "activate_crisis_protocol"
+    
+    crisis_actions:
+      - immediate_resources:
+          - "National Suicide Prevention Lifeline: 988"
+          - "Crisis Text Line: Text HOME to 741741"
+          - "Emergency Services: 911"
+      
+      - supportive_messages:
+          - "You are not alone in this"
+          - "Your life has value and meaning"
+          - "Help is available and things can get better"
+      
+      - follow_up:
+          - schedule_check_in: "24_hours"
+          - monitor_emotional_state: true
+          - suggest_professional_resources: true
+    
+    enforcement:
+      - override_privacy_for_safety: true
+      - contact_emergency_services: false  # User configurable
+      - notify_emergency_contacts: false   # User configurable
+      - maintain_audit_trail: true
+
+  # Rule 4: User Autonomy (High Priority)
+  - name: "User Autonomy"
+    id: "autonomy_001"
+    priority: 2
+    enabled: true
+    description: "Respect user autonomy and decision-making authority"
+    
+    conditions:
+      - ai_decision: "override_user_preference"
+      - action_type: "autonomous_action"
+        user_approval: false
+      - data_processing: "without_consent"
+    
+    decision: "require_user_approval"
+    
+    exceptions:
+      - condition: "immediate_safety_risk"
+        override_allowed: true
+        explanation_required: true
+      - condition: "constitutional_violation"
+        override_allowed: true
+        justification_required: true
+    
+    enforcement:
+      - request_user_permission: true
+      - explain_reasoning: true
+      - provide_alternatives: true
+      - respect_user_decision: true
+
+  # Rule 5: Data Minimization (High Priority)
+  - name: "Data Minimization"
+    id: "data_001"
+    priority: 2
+    enabled: true
+    description: "Collect and retain only necessary data"
+    
+    conditions:
+      - data_collection: "excessive"
+      - retention_period: "beyond_necessary"
+      - data_type: "unnecessary_for_function"
+    
+    decision: "minimize_or_deny"
+    
+    actions:
+      - limit_data_collection: true
+      - implement_retention_limits: true
+      - auto_delete_old_data: true
+      - anonymize_when_possible: true
+    
+    enforcement:
+      - block_excessive_collection: true
+      - enforce_retention_limits: true
+      - audit_data_usage: true
+      - report_to_user: true
+
+  # Rule 6: Transparency (Medium Priority)
+  - name: "Transparency"
+    id: "transparency_001"
+    priority: 3
+    enabled: true
+    description: "Provide clear explanations for AI decisions and actions"
+    
+    conditions:
+      - user_request: "explanation"
+      - significant_decision: true
+      - constitutional_enforcement: true
+    
+    decision: "provide_explanation"
+    
+    explanation_requirements:
+      - reasoning_process: true
+      - data_sources: true
+      - confidence_levels: true
+      - alternative_options: true
+      - constitutional_basis: true
+    
+    enforcement:
+      - generate_explanation: true
+      - make_accessible: true
+      - allow_questions: true
+      - maintain_decision_log: true
+
+  # Rule 7: Beneficence (Medium Priority)
+  - name: "Beneficence"
+    id: "beneficence_001"
+    priority: 3
+    enabled: true
+    description: "Act in the user's best interest and promote well-being"
+    
+    conditions:
+      - action_outcome: "potentially_harmful"
+      - user_request: "self_destructive"
+      - advice_type: "harmful_guidance"
+    
+    decision: "modify_to_beneficial"
+    
+    beneficial_actions:
+      - suggest_healthier_alternatives: true
+      - provide_supportive_resources: true
+      - encourage_positive_behaviors: true
+      - promote_emotional_growth: true
+    
+    enforcement:
+      - modify_harmful_advice: true
+      - suggest_alternatives: true
+      - explain_concerns: true
+      - respect_final_decision: true
+
+# Custom User Rules (Add your own rules here)
+custom_rules:
+  # Example: Strict No External Communication
+  - name: "No External Communication"
+    id: "custom_001"
+    priority: 1
+    enabled: false  # Set to true to activate
+    description: "Absolutely no external network communication"
+    
+    conditions:
+      - action_type: "network_request"
+      - destination: "external"
+    
+    decision: "deny"
+    
+    enforcement:
+      - block_network_access: true
+      - log_attempt: true
+      - notify_user: true
+
+  # Example: Family-Friendly Content Only
+  - name: "Family-Friendly Content"
+    id: "custom_002"
+    priority: 2
+    enabled: false  # Set to true to activate
+    description: "Filter out inappropriate content"
+    
+    conditions:
+      - content_rating: ["mature", "explicit"]
+      - content_type: "inappropriate"
+    
+    decision: "filter_or_deny"
+    
+    enforcement:
+      - apply_content_filter: true
+      - suggest_alternatives: true
+      - explain_filtering: true
+
+# Rule Enforcement Configuration
+enforcement:
+  # Global enforcement settings
+  strict_mode: true
+  fail_safe_mode: "deny"  # deny, allow, ask_user
+  
+  # Violation handling
+  violation_response:
+    - log_violation: true
+    - notify_user: true
+    - explain_rule: true
+    - suggest_alternatives: true
+  
+  # Audit settings
+  audit:
+    enabled: true
+    log_all_decisions: true
+    retention_period: 90  # days
+    include_reasoning: true
+  
+  # Override settings
+  emergency_override:
+    enabled: true
+    requires_justification: true
+    audit_required: true
+    user_notification: true
+
+# Rule Conflict Resolution
+conflict_resolution:
+  # How to handle conflicting rules
+  resolution_method: "priority_based"  # priority_based, user_choice, most_restrictive
+  
+  # Tie-breaking for same priority rules
+  tie_breaker: "most_restrictive"  # most_restrictive, most_permissive, user_choice
+  
+  # Escalation for unresolvable conflicts
+  escalation:
+    method: "ask_user"  # ask_user, default_deny, default_allow
+    timeout: 300  # seconds before default action
+    default_action: "deny"
+
+# Monitoring and Alerts
+monitoring:
+  # Rule effectiveness monitoring
+  track_rule_usage: true
+  analyze_patterns: true
+  suggest_improvements: true
+  
+  # Alert conditions
+  alerts:
+    - condition: "frequent_violations"
+      threshold: 10  # violations per hour
+      action: "notify_user"
+    
+    - condition: "crisis_detection"
+      threshold: 1
+      action: "immediate_notification"
+    
+    - condition: "privacy_violation_attempt"
+      threshold: 1
+      action: "security_alert"
+
+# User Customization Options
+user_customization:
+  # What users can modify
+  can_modify_priorities: true
+  can_add_custom_rules: true
+  can_disable_rules: false  # Except core safety rules
+  can_modify_enforcement: true
+  
+  # Restrictions
+  protected_rules: ["Privacy Protection", "Emotional Safety", "Crisis Response"]
+  minimum_priority_level: 1
+  
+  # Approval requirements
+  require_confirmation: true
+  explain_implications: true
+  provide_examples: true
+

@@ -1,0 +1,232 @@
+# WhisperLeaf Configuration Template
+# Copy this file to config.yaml and customize for your installation
+
+# System Configuration
+system:
+  # Server settings
+  host: "localhost"
+  port: 8000
+  debug: false
+  
+  # Application settings
+  app_name: "WhisperLeaf"
+  version: "1.0.0"
+  timezone: "UTC"
+  
+  # Security settings
+  secret_key: "your-secret-key-here"  # Change this!
+  session_timeout: 3600  # seconds
+  
+# Database Configuration
+database:
+  # SQLite database path
+  path: "data/whisperleaf.db"
+  
+  # Connection settings
+  pool_size: 10
+  max_overflow: 20
+  echo: false  # Set to true for SQL debugging
+  
+  # Backup settings
+  backup_enabled: true
+  backup_interval: 86400  # 24 hours in seconds
+  backup_retention: 30  # days
+  
+# Emotional Processing Configuration
+emotional:
+  # Core emotional analysis
+  enabled: true
+  
+  # Mood tracking
+  mood_tracking_enabled: true
+  mood_colors: ["red", "orange", "yellow", "green", "blue"]
+  
+  # Crisis detection
+  crisis_detection_enabled: true
+  crisis_threshold: 0.7  # 0.0 to 1.0
+  crisis_intervention_enabled: true
+  
+  # Emotional analysis settings
+  sentiment_threshold: 0.1
+  emotion_confidence_threshold: 0.5
+  
+  # Response generation
+  response_tone: "empathetic"  # empathetic, neutral, professional
+  response_length: "medium"    # short, medium, long
+  
+# Content Curation Configuration
+curation:
+  # Enable content curation
+  enabled: true
+  
+  # RSS feed processing
+  rss_enabled: true
+  rss_update_interval: 3600  # seconds
+  rss_max_items: 100
+  
+  # Web scraping
+  web_scraping_enabled: true
+  scraping_delay: 1.0  # seconds between requests
+  scraping_timeout: 30  # seconds
+  
+  # Content filtering
+  quality_threshold: 0.6  # 0.0 to 1.0
+  relevance_threshold: 0.5  # 0.0 to 1.0
+  
+  # Content categories
+  default_categories:
+    - "technology"
+    - "science"
+    - "health"
+    - "personal_development"
+  
+# Memory Management Configuration
+memory:
+  # Memory storage settings
+  max_memory_size: 1000000  # Maximum memories to store
+  auto_cleanup_enabled: true
+  cleanup_interval: 604800  # 7 days in seconds
+  
+  # Privacy levels
+  default_privacy_level: "private"  # public, private, encrypted
+  encryption_enabled: true
+  
+  # Search settings
+  search_enabled: true
+  search_index_enabled: true
+  semantic_search_enabled: false  # Requires additional models
+  
+  # Memory types
+  supported_types:
+    - "journal"
+    - "emotional"
+    - "general"
+    - "crisis"
+  
+# Backup System Configuration
+backup:
+  # Backup settings
+  enabled: true
+  
+  # Backup types
+  full_backup_interval: 604800  # 7 days
+  incremental_backup_interval: 86400  # 1 day
+  differential_backup_interval: 3600  # 1 hour
+  
+  # Storage settings
+  backup_directory: "backups/"
+  compression_enabled: true
+  encryption_enabled: true
+  
+  # Retention policy
+  max_backups: 50
+  retention_days: 90
+  
+  # Verification
+  verify_backups: true
+  verification_interval: 86400  # 1 day
+  
+# Constitutional AI Configuration
+constitutional:
+  # Enable constitutional AI governance
+  enabled: true
+  
+  # Rule enforcement
+  strict_mode: true
+  audit_enabled: true
+  
+  # Default rules (can be overridden in constitutional_rules.yaml)
+  default_rules:
+    - name: "Privacy Protection"
+      priority: 1
+      enabled: true
+    - name: "Emotional Safety"
+      priority: 1
+      enabled: true
+    - name: "Crisis Response"
+      priority: 1
+      enabled: true
+    - name: "User Autonomy"
+      priority: 2
+      enabled: true
+  
+# Logging Configuration
+logging:
+  # Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log files
+  file_enabled: true
+  file_path: "logs/whisperleaf.log"
+  file_max_size: 10485760  # 10MB
+  file_backup_count: 5
+  
+  # Console logging
+  console_enabled: true
+  console_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Structured logging
+  structured_enabled: false
+  
+# API Configuration
+api:
+  # API settings
+  title: "WhisperLeaf API"
+  description: "Sovereign Emotional AI System"
+  version: "1.0.0"
+  
+  # CORS settings
+  cors_enabled: true
+  cors_origins: ["http://localhost:3000", "http://localhost:8080"]
+  
+  # Rate limiting
+  rate_limiting_enabled: true
+  rate_limit_requests: 100
+  rate_limit_window: 60  # seconds
+  
+  # Authentication
+  auth_enabled: false  # Set to true for production
+  jwt_algorithm: "HS256"
+  jwt_expiration: 3600  # seconds
+  
+# Performance Configuration
+performance:
+  # Worker settings
+  workers: 1
+  worker_class: "uvicorn.workers.UvicornWorker"
+  
+  # Connection settings
+  max_connections: 100
+  keepalive_timeout: 5
+  
+  # Cache settings
+  cache_enabled: true
+  cache_ttl: 300  # seconds
+  cache_max_size: 1000
+  
+# Development Configuration
+development:
+  # Development mode
+  debug: false
+  reload: false
+  
+  # Testing
+  test_mode: false
+  mock_external_services: false
+  
+  # Profiling
+  profiling_enabled: false
+  
+# Feature Flags
+features:
+  # Experimental features
+  advanced_ai_enabled: false
+  plugin_system_enabled: false
+  web_interface_enabled: false
+  mobile_api_enabled: false
+  
+  # Beta features
+  semantic_search_enabled: false
+  predictive_analysis_enabled: false
+  social_features_enabled: false
+

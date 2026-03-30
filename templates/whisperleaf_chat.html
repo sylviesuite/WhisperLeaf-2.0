@@ -45,37 +45,56 @@
       align-items: center;
     }
 
-    /* Outer ring: CSS-only, crisp circle; owl artwork unchanged inside */
-    .app-logo .owl-icon-wrap {
+    .logo-circle {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .owl-img {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .app-logo .logo-circle {
       width: 56px;
       height: 56px;
-      box-sizing: border-box;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      border-width: 3px;
+      border-color: rgba(255, 255, 255, 0.28);
       line-height: 0;
-      border-radius: 50%;
-      overflow: hidden;
       cursor: pointer;
-      background: #111;
-      border: 3px solid rgba(255, 255, 255, 0.28);
       transition: transform 0.18s ease, box-shadow 0.18s ease;
     }
 
-    .app-logo .owl-icon-wrap:hover {
+    .app-logo .logo-circle:hover {
       transform: scale(1.04);
       box-shadow: 0 0 18px rgba(120, 255, 200, 0.25);
     }
 
-    /* Match landing page: overscale so badge reaches circle edge; container crops */
-    .app-logo .owl-icon-wrap img,
-    .app-logo .owl-icon-wrap .owl-icon {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-      flex-shrink: 0;
+    .app-logo .logo-circle.owl-thinking {
+      animation: owlThinkingPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes owlThinkingPulse {
+      0%   { transform: scale(1); box-shadow: 0 0 0 rgba(120,255,180,0); }
+      50%  { transform: scale(1.04); box-shadow: 0 0 14px rgba(120,255,180,0.25); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(120,255,180,0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .app-logo .logo-circle.owl-thinking {
+        animation: none;
+      }
     }
 
     .app-title {
@@ -83,6 +102,18 @@
       font-weight: 600;
       color: #e6edf3;
       letter-spacing: 0.02em;
+    }
+
+    .app-header-local-note {
+      margin: 0.35rem 0 0 0;
+      padding: 0 0.75rem;
+      font-size: 0.66rem;
+      font-weight: 400;
+      color: #6e7681;
+      letter-spacing: 0.02em;
+      line-height: 1.35;
+      text-align: center;
+      max-width: 280px;
     }
 
     /* Desktop app layout: collapsible sidebar + main */
@@ -269,46 +300,6 @@
       color: inherit;
     }
 
-    .app-sidebar .chat-owl {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-      padding: 8px 0;
-    }
-
-    .app-sidebar .chat-owl .owl-icon-wrap {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .app-sidebar .owl-icon-wrap {
-      width: 56px;
-      height: 56px;
-      box-sizing: border-box;
-      border-radius: 50%;
-      overflow: hidden;
-      background: #111;
-      border: 3px solid rgba(255, 255, 255, 0.28);
-    }
-
-    .app-sidebar .owl-icon-wrap img,
-    .app-sidebar .owl-icon-wrap .owl-icon {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-      flex-shrink: 0;
-    }
-
-    .app-layout.sidebar-collapsed .app-sidebar .owl-icon-wrap {
-      width: 44px;
-      height: 44px;
-      border-width: 2px;
-    }
-
     .sidebar-title {
       font-size: 0.95rem;
       font-weight: 600;
@@ -466,6 +457,7 @@
       align-items: center;
       gap: 0.4rem;
       flex-shrink: 0;
+      margin-left: auto;
     }
 
     .chat-main-column {
@@ -550,57 +542,6 @@
       display: flex;
       flex-direction: column;
       max-height: 85vh;
-    }
-
-    .chat-owl {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 12px 0 4px;
-      flex-shrink: 0;
-    }
-
-    .chat-owl .owl-icon-wrap {
-      width: 56px;
-      height: 56px;
-      box-sizing: border-box;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      line-height: 0;
-      border-radius: 50%;
-      overflow: hidden;
-      background: #111;
-      border: 3px solid rgba(255, 255, 255, 0.28);
-      cursor: pointer;
-    }
-
-    .chat-owl .owl-icon-wrap img,
-    .chat-owl .owl-icon-wrap .owl-icon {
-      width: 135%;
-      height: 135%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-      flex-shrink: 0;
-    }
-
-    .chat-owl .owl-icon-wrap.owl-thinking,
-    .app-logo .owl-icon-wrap.owl-thinking {
-      animation: owlThinkingPulse 1.4s ease-in-out infinite;
-    }
-
-    @keyframes owlThinkingPulse {
-      0%   { transform: scale(1); box-shadow: 0 0 0 rgba(120,255,180,0); }
-      50%  { transform: scale(1.04); box-shadow: 0 0 14px rgba(120,255,180,0.25); }
-      100% { transform: scale(1); box-shadow: 0 0 0 rgba(120,255,180,0); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .chat-owl .owl-icon-wrap.owl-thinking,
-      .app-logo .owl-icon-wrap.owl-thinking {
-        animation: none;
-      }
     }
 
     .card-header {
@@ -744,8 +685,8 @@
     }
 
     .chat-status-sub {
-      font-size: 11px;
-      color: #6e7681;
+      font-size: 10px;
+      color: #586069;
       line-height: 1.35;
       margin: 0;
     }
@@ -999,6 +940,7 @@
       color: #8b949e;
       padding: 0.25rem 1.25rem 0.5rem;
       min-height: 1.25rem;
+      white-space: pre-line;
     }
     .input-drop-feedback.hidden {
       display: none;
@@ -1597,19 +1539,65 @@
       flex-direction: column;
       gap: 0.35rem;
     }
+    .sources-panel-hint {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.68rem;
+      color: #8b949e;
+      line-height: 1.4;
+    }
+    .sources-actions-intro {
+      margin: 0.65rem 0 0.35rem 0;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #9da7b2;
+    }
     .document-item {
       display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.4rem 0.4rem;
+      align-items: flex-start;
+      gap: 0.45rem;
+      padding: 0.45rem 0.4rem;
       background: rgba(255, 255, 255, 0.04);
       border-radius: 6px;
       font-size: 0.72rem;
       color: #c9d1d9;
     }
+    .source-item-icon {
+      flex-shrink: 0;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      width: 1.25rem;
+      text-align: center;
+      user-select: none;
+    }
     .document-item .document-info {
       flex: 1;
       min-width: 0;
+    }
+    .source-item-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.28rem;
+      flex-shrink: 0;
+    }
+    .btn-source-reindex {
+      padding: 0.2rem 0.35rem;
+      font-size: 0.65rem;
+      border: 1px solid rgba(88, 166, 255, 0.35);
+      background: rgba(56, 139, 253, 0.1);
+      color: #79c0ff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background-color 0.14s ease, border-color 0.14s ease;
+    }
+    .btn-source-reindex:hover:not(:disabled) {
+      background: rgba(56, 139, 253, 0.18);
+      border-color: rgba(88, 166, 255, 0.55);
+    }
+    .btn-source-reindex:disabled {
+      opacity: 0.45;
+      cursor: default;
     }
     .document-item .document-filename {
       font-weight: 500;
@@ -1623,14 +1611,14 @@
       margin-top: 0.15rem;
     }
     .document-item .btn-delete-document {
-      flex-shrink: 0;
       padding: 0.2rem 0.35rem;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       border: 1px solid rgba(248, 81, 73, 0.4);
       background: rgba(248, 81, 73, 0.12);
       color: #f85149;
       border-radius: 4px;
       cursor: pointer;
+      font-family: inherit;
       transition: background-color 0.14s ease, border-color 0.14s ease;
     }
     .document-item .btn-delete-document:hover {
@@ -1660,6 +1648,7 @@
       color: #8b949e;
       margin-bottom: 0.5rem;
       min-height: 1.25em;
+      white-space: pre-line;
     }
     .document-upload-status.hidden {
       display: none;
@@ -1669,6 +1658,133 @@
     }
     .document-upload-status.success {
       color: #7ee787;
+    }
+    .document-upload-status.info {
+      color: #9da7b2;
+    }
+
+    .document-url-label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #c9d1d9;
+      margin: 0.5rem 0 0.2rem 0;
+    }
+    .document-url-helper {
+      margin: 0 0 0.45rem 0;
+      font-size: 0.7rem;
+      color: #8b949e;
+      line-height: 1.35;
+    }
+
+    .sources-first-use-nudge {
+      margin: 0.35rem 0 0.55rem 0;
+      padding: 0.45rem 0.4rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .sources-first-use-nudge.hidden {
+      display: none;
+    }
+    .sources-first-use-lead {
+      margin: 0;
+      font-size: 0.7rem;
+      color: #9da7b2;
+      line-height: 1.45;
+    }
+    .sources-first-use-hints {
+      margin: 0.35rem 0 0;
+      padding-left: 1.05rem;
+      font-size: 0.66rem;
+      color: #8b949e;
+      line-height: 1.45;
+    }
+
+    .session-context-line {
+      margin: 0;
+      padding: 0.4rem 1.25rem 0.15rem;
+      font-size: 0.72rem;
+      color: #6e7681;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .document-url-input {
+      margin-bottom: 0.45rem;
+    }
+
+    .watch-folder-block {
+      margin: 0.55rem 0 0.35rem 0;
+      padding-top: 0.35rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .watch-folder-label {
+      display: block;
+      margin: 0 0 0.2rem 0;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+    .watch-folder-hint {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.66rem;
+      color: #6e7681;
+      line-height: 1.4;
+    }
+    .watch-folder-path-input {
+      margin-bottom: 0.35rem;
+    }
+    .watch-folder-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.4rem;
+      margin: 0 0 0.35rem 0;
+    }
+    .watch-folder-path-display {
+      margin: 0.15rem 0 0 0;
+      font-size: 0.66rem;
+      color: #8b949e;
+      line-height: 1.35;
+      word-break: break-word;
+      min-height: 1.15em;
+    }
+    .watch-folder-state-line {
+      margin: 0.25rem 0 0.2rem 0;
+      font-size: 0.66rem;
+      color: #6e7681;
+      line-height: 1.4;
+      min-height: 1.2em;
+    }
+    .watch-folder-state-line.is-error {
+      color: #a68b7a;
+    }
+    .watch-folder-feedback {
+      margin: 0 0 0.3rem 0;
+      font-size: 0.65rem;
+      color: #7eb89a;
+      line-height: 1.35;
+      min-height: 1.1em;
+    }
+    .watch-folder-feedback.hidden {
+      display: none;
+    }
+    .watch-folder-path-block {
+      margin: 0.35rem 0 0.15rem 0;
+    }
+    .watch-folder-path-block.hidden {
+      display: none;
+    }
+    .watch-folder-path-heading {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #586069;
+      margin: 0 0 0.1rem 0;
+    }
+    .watch-folder-input-wrap.hidden {
+      display: none;
     }
 
     .memory-saved-notification {
@@ -1776,6 +1892,71 @@
       font-size: 0.9rem;
     }
 
+    .first-run-orientation {
+      margin: 0 0 1rem 0;
+      padding: 0 0 1rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      text-align: left;
+    }
+    .first-run-orientation.hidden {
+      display: none;
+    }
+    .first-run-lead {
+      margin: 0;
+      font-size: 0.88rem;
+      color: #c9d1d9;
+      line-height: 1.55;
+      font-weight: 500;
+    }
+    .first-run-cap-intro {
+      margin: 0.75rem 0 0.3rem 0;
+      font-size: 0.76rem;
+      color: #8b949e;
+      font-weight: 500;
+    }
+    .first-run-cap-list {
+      margin: 0;
+      padding: 0 0 0 1.1rem;
+      font-size: 0.78rem;
+      color: #9da7b2;
+      line-height: 1.55;
+    }
+    .first-run-cap-list li {
+      margin: 0.15rem 0;
+    }
+    .first-run-quick {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 0.85rem;
+      justify-content: flex-start;
+    }
+    .first-run-quick-action {
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font: inherit;
+      font-size: 0.76rem;
+      color: #7d8590;
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: rgba(125, 133, 144, 0.45);
+      text-underline-offset: 3px;
+    }
+    .first-run-quick-action:hover {
+      color: #9da7b2;
+      text-decoration-color: rgba(157, 167, 178, 0.55);
+    }
+    .first-run-quick-action:focus {
+      outline: none;
+    }
+    .first-run-quick-action:focus-visible {
+      outline: 2px solid rgba(88, 166, 255, 0.45);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
     .chat-hints {
       display: none;
       opacity: 0;
@@ -1874,6 +2055,25 @@
       display: none;
     }
 
+    .starter-empty-chat-line {
+      margin: 0.65rem 0 0.35rem 0;
+      font-size: 0.82rem;
+      color: #c9d1d9;
+      line-height: 1.45;
+    }
+    .starter-example-hints {
+      margin: 0 0 0.5rem 0;
+      padding: 0 0 0 1.1rem;
+      text-align: left;
+      font-size: 0.78rem;
+      color: #8b949e;
+      line-height: 1.5;
+      list-style: disc;
+    }
+    .starter-example-hints li {
+      margin: 0.2rem 0;
+    }
+
     @media (max-width: 900px) {
       .starter-prompts {
         grid-template-columns: 1fr;
@@ -1910,13 +2110,22 @@
 
     .leaflink-mock-title-row {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.5rem;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .leaflink-mock-owl-ring {
+      width: 48px;
+      height: 48px;
+      border-width: 2px;
+      flex-shrink: 0;
     }
 
     .leaflink-mock-title {
       margin: 0;
+      flex: 1;
+      min-width: 0;
       font-size: 0.95rem;
       font-weight: 600;
       letter-spacing: 0.02em;
@@ -3102,10 +3311,11 @@
 <body>
   <header class="app-header">
     <div class="app-logo">
-      <span id="chatOwl" class="owl-icon-wrap" aria-hidden="true" role="button" tabindex="0">
-        <img src="/static/owl_only.png" alt="WhisperLeaf" class="owl-icon" />
+      <span id="chatOwl" class="logo-circle" aria-hidden="true" role="button" tabindex="0">
+        <img src="/static/assets/images/owl.png" alt="WhisperLeaf logo" class="owl-img" />
       </span>
-      <div class="app-title">WhisperLeaf</div>
+      <div class="app-title" title="WhisperLeaf does not store or send your data">WhisperLeaf</div>
+      <p class="app-header-local-note">Running locally • No external calls</p>
     </div>
   </header>
   <div id="appLayout" class="app-layout">
@@ -3121,15 +3331,53 @@
           <p id="mindModel" class="sidebar-system-model">Llama 3.2 (local)</p>
           <p class="sidebar-system-status">Running locally • No external calls</p>
         </section>
-        <section id="documentsSection" class="sidebar-section documents-section" aria-label="Documents">
-          <h3 class="sidebar-section-title">Documents</h3>
+        <section id="documentsSection" class="sidebar-section documents-section" aria-label="Sources">
+          <h3 class="sidebar-section-title">Sources</h3>
+          <p class="sources-panel-hint">These are the materials WhisperLeaf is using in this session.</p>
+          <p class="sources-boundary-hint">This session stays on your device</p>
+          <input type="text" id="documentSearchInput" class="document-search-input" placeholder="Search sources…" aria-label="Search sources" autocomplete="off">
+          <ul id="documentsList" class="documents-list" aria-label="Session sources"></ul>
+          <p id="documentsEmpty" class="documents-empty hidden">No sources added yet.</p>
+          <p id="documentsNoResults" class="documents-no-results hidden">No matching sources.</p>
+          <div id="sourcesFirstUseNudge" class="sources-first-use-nudge" aria-label="Getting started with sources">
+            <p class="sources-first-use-lead">You can add documents or links to give WhisperLeaf context.</p>
+            <ul class="sources-first-use-hints">
+              <li>Upload a file</li>
+              <li>Paste a link</li>
+            </ul>
+          </div>
+          <p class="sources-actions-intro">Add to this session</p>
           <input type="file" id="documentUploadInput" class="document-upload-input hidden" accept=".txt,.md,.markdown" aria-label="Choose document to upload">
           <button type="button" id="documentUploadBtn" class="btn btn-upload-document" title="Upload a .txt or .md file">Upload Document</button>
           <div id="documentUploadStatus" class="document-upload-status hidden" role="status" aria-live="polite"></div>
-          <input type="text" id="documentSearchInput" class="document-search-input" placeholder="Search documents..." aria-label="Search documents by name" autocomplete="off">
-          <ul id="documentsList" class="documents-list" aria-label="Uploaded documents"></ul>
-          <p id="documentsEmpty" class="documents-empty hidden">No documents uploaded yet.</p>
-          <p id="documentsNoResults" class="documents-no-results hidden">No documents found.</p>
+          <label for="documentUrlInput" class="document-url-label">Add URL</label>
+          <p class="document-url-helper">Paste a link to bring fresh content into this session.</p>
+          <input type="url" id="documentUrlInput" class="document-search-input document-url-input" placeholder="https://…" autocomplete="off" aria-label="Page URL to fetch" inputmode="url" />
+          <button type="button" id="documentFetchUrlBtn" class="btn btn-upload-document">Fetch &amp; Add</button>
+          <div id="documentUrlStatus" class="document-upload-status hidden" role="status" aria-live="polite"></div>
+          <div class="watch-folder-block">
+            <p class="watch-folder-label">Watch Folder</p>
+            <p id="watchFolderFirstHint" class="watch-folder-hint">Select a folder to keep your session up to date.</p>
+            <p id="watchFolderStateLine" class="watch-folder-state-line">No folder selected</p>
+            <p id="watchFolderFeedback" class="watch-folder-feedback hidden" role="status" aria-live="polite"></p>
+            <div id="watchFolderInputWrap" class="watch-folder-input-wrap">
+              <input type="text" id="watchFolderPathInput" class="document-search-input watch-folder-path-input" placeholder="Full path on this computer…" autocomplete="off" aria-label="Watched folder path" spellcheck="false" />
+            </div>
+            <div id="watchFolderActionsIdle" class="watch-folder-actions">
+              <button type="button" id="watchFolderBrowseBtn" class="btn btn-upload-document">Select Folder</button>
+              <button type="button" id="watchFolderStartBtn" class="btn btn-upload-document">Start watching</button>
+            </div>
+            <div id="watchFolderActionsActive" class="watch-folder-actions hidden">
+              <button type="button" id="watchFolderChangeBtn" class="btn btn-upload-document">Change folder</button>
+              <button type="button" id="watchFolderStopBtn" class="btn btn-upload-document">Stop watching</button>
+            </div>
+            <div id="watchFolderPathBlock" class="watch-folder-path-block hidden">
+              <span class="watch-folder-path-heading">Watched folder</span>
+              <p id="watchFolderPathDisplay" class="watch-folder-path-display" aria-live="polite"></p>
+            </div>
+          </div>
+          <button type="button" id="documentReindexBtn" class="btn btn-upload-document">Re-index Session</button>
+          <div id="documentReindexStatus" class="document-upload-status hidden" role="status" aria-live="polite"></div>
         </section>
         <section id="memorySidebarSection" class="sidebar-section" aria-label="Memory">
           <h3 class="sidebar-section-title">Memory</h3>
@@ -3172,9 +3420,9 @@
             <button type="button" id="onboardingHelpBtn" class="btn-onboarding-help" title="Show welcome / help" aria-label="Show welcome and help">?</button>
           </div>
         </div>
-        <div class="chat-status" role="status" aria-live="polite">
+        <div class="chat-status" role="status" aria-live="polite" title="WhisperLeaf does not store or send your data">
           <div class="chat-status-line">🟢 Local • Offline</div>
-          <div class="chat-status-sub">Your data stays on this device</div>
+          <div class="chat-status-sub">WhisperLeaf does not store or send your data</div>
         </div>
         <div id="modelUnavailableBanner" class="model-unavailable-banner hidden" role="status" aria-live="polite">
           <div id="modelStatusIndicator" class="model-status-indicator unavailable">
@@ -3218,7 +3466,7 @@
             <p class="onboarding-intro">Your private, local AI assistant.</p>
             <ul class="onboarding-list" aria-label="What you can do">
               <li>Runs entirely on your machine — no data leaves your device</li>
-              <li>Upload documents in the sidebar to ask questions about them</li>
+              <li>Add files or links under Sources in the sidebar to ask about them</li>
               <li>Memories are saved privately and used to improve answers</li>
             </ul>
             <div id="onboardingModelReady" class="onboarding-model-status onboarding-model-ready hidden" role="status">
@@ -3231,13 +3479,33 @@
           </div>
           <div class="chat-hints visible" id="chatHints" aria-hidden="false">
             <div class="starter-panel" id="starterPanel">
-              <h2 class="starter-title">A private AI workspace for thinking, not just chatting.</h2>
-              <p class="starter-subtext">Ask a question, drop in a document, or paste a note. Everything stays on your device.</p>
-              <p class="starter-assistant-hint">I'm here to help you think it through — calmly and clearly, one step at a time.</p>
+              <div id="firstRunOrientation" class="first-run-orientation hidden" aria-label="Getting started">
+                <p class="first-run-lead">WhisperLeaf runs entirely on your device.<br>No accounts. No tracking.</p>
+                <p class="first-run-cap-intro">You can:</p>
+                <ul class="first-run-cap-list">
+                  <li>Ask questions</li>
+                  <li>Add documents</li>
+                  <li>Paste a link</li>
+                  <li>Watch a folder</li>
+                </ul>
+                <div class="first-run-quick" role="group" aria-label="Quick start">
+                  <button type="button" class="first-run-quick-action" data-orientation-action="upload">Upload a document</button>
+                  <button type="button" class="first-run-quick-action" data-orientation-action="link">Paste a link</button>
+                  <button type="button" class="first-run-quick-action" data-orientation-action="ask">Ask a question</button>
+                </div>
+              </div>
+              <h2 class="starter-title">A quiet space to think.</h2>
+              <p class="starter-subtext">Sources and links are in the sidebar when you need them.</p>
+              <p class="starter-assistant-hint">I'm here when you want to work through something — calmly, one step at a time.</p>
+              <p class="starter-empty-chat-line" id="starterEmptyChatLine">Ask a question or add context to get started.</p>
+              <ul class="starter-example-hints" aria-label="Example questions">
+                <li>Summarize this document</li>
+                <li>What are the key points here?</li>
+              </ul>
               <div class="starter-prompts" id="starterPrompts">
                 <button type="button" class="starter-prompt-btn" data-prompt="Help me think through this idea without sending anything to the cloud.">Help me think through this idea without sending anything to the cloud.</button>
               </div>
-              <p id="starterDocNudge" class="starter-doc-nudge hidden">You can also ask questions about your local documents.</p>
+              <p id="starterDocNudge" class="starter-doc-nudge hidden">You can ask about anything listed under Sources.</p>
             </div>
           </div>
           <div class="messages-inner" id="chatWindow"></div>
@@ -3248,6 +3516,7 @@
           <span id="chatLeafLinkInsertHint" class="chat-leaflink-insert-hint hidden" role="status" aria-live="polite"></span>
         </div>
         <div class="chat-compose-foot">
+          <p id="sessionContextLine" class="session-context-line" role="status" aria-live="polite"></p>
           <div class="compose-suggestion-chips" id="composeSuggestionChips" role="group" aria-label="Quick suggestions">
             <button type="button" class="compose-suggestion-chip" data-prompt="Help me think through an idea">Help me think through an idea</button>
             <button type="button" class="compose-suggestion-chip" data-prompt="Organize my thoughts into a plan">Organize my thoughts into a plan</button>
@@ -3289,6 +3558,9 @@
       >
         <div class="leaflink-mock-header">
           <div class="leaflink-mock-title-row">
+            <div class="logo-circle leaflink-mock-owl-ring" aria-hidden="true">
+              <img src="/static/assets/images/owl.png" alt="" class="owl-img" />
+            </div>
             <h2 class="leaflink-mock-title">LeafLink Review Queue</h2>
             <div class="leaflink-mock-header-trail">
               <span class="leaflink-mock-badge" title="Demo data only">Mock Mode</span>
