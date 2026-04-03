@@ -53,6 +53,7 @@ from .memory_models import (
 from .chat_engine import generate_reply
 from .local_model import LocalModelClient
 from .memory_injection_guard import (
+    MEMORY_TOP_K,
     filter_relevant_memories,
     build_memory_context_block,
     detect_topic_reset,
@@ -118,17 +119,20 @@ _APP_START_TIME = time.time()
 # Paths, static files, templates, prompts
 # -------------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-# Static dir (same level as src/) – CSS, JS, images only
+CORE_DIR = Path(__file__).resolve().parent
+SRC_DIR = CORE_DIR.parent
+PROJECT_ROOT = SRC_DIR.parent
 STATIC_DIR = PROJECT_ROOT / "static"
+
+print("STATIC_DIR =", STATIC_DIR)
+print("OWL EXISTS =", (STATIC_DIR / "assets" / "images" / "owl.png").exists())
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/owl.png")
 async def serve_root_owl_png():
-    """Same file as /assets/images/owl.png (legacy /owl.png links, e.g. Signal Board)."""
-    path = STATIC_DIR / "assets" / "images" / "owl.png"
+    """Serve owl.png at site root (matches Signal Board / marketing img src)."""
+    path = STATIC_DIR / "owl.png"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path, media_type="image/png")
@@ -137,9 +141,13 @@ DOWNLOADS_DIR = STATIC_DIR / "downloads"
 if DOWNLOADS_DIR.is_dir():
     app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 
-# Marketing CSS, JS export, images: bundled under static/assets/ (beta zip is self-contained; no repo root needed).
-ASSETS_DIR = STATIC_DIR / "assets"
-if ASSETS_DIR.is_dir():
+# Marketing CSS/images (/assets/...) — prefer static/assets (beta/self-contained), else whisperleaf-site build output
+_assets_static = STATIC_DIR / "assets"
+_assets_site = PROJECT_ROOT / "whisperleaf-site" / "assets"
+ASSETS_DIR = _assets_static if _assets_static.is_dir() else (
+    _assets_site if _assets_site.is_dir() else None
+)
+if ASSETS_DIR is not None:
     app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 # Benchmarks dir – methodology and benchmark docs (e.g. /benchmarks/whisperleaf_energy_methodology.md)
@@ -848,10 +856,13 @@ async def _rewrite_memory_query(user_message: str) -> str:
         return (user_message or "").strip()
 
 
-async def _build_memory_context(user_message: str, query: str, limit: int = 5):
+async def _build_memory_context(user_message: str, query: str, limit: int = MEMORY_TOP_K):
     """
     Build a RELEVANT MEMORY context block via the Tool Bus (memory.search),
     then apply memory injection guardrails to prevent "memory bleed".
+
+    Conversation history (recentTurns) is assembled separately and always takes precedence;
+    this block only adds a few vault snippets when relevance_score is clearly high enough.
 
     Returns (block_string, injected_snippets_list) for model context and UI visibility.
     """
@@ -1178,7 +1189,9 @@ async def chat_endpoint(payload: ChatRequest):
         if not (memory_query or "").strip():
             memory_query = message_for_model
         # Use the live user message for pivot/relevance detection; use rewritten query only for retrieval.
-        memory_block, memory_snippets = await _build_memory_context(message_for_model, memory_query, limit=5)
+        memory_block, memory_snippets = await _build_memory_context(
+            message_for_model, memory_query, limit=MEMORY_TOP_K
+        )
     except Exception as e:
         print("[WhisperLeaf chat] memory retrieval failed (continuing without): %s" % e)
         memory_block = ""

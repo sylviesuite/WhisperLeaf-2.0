@@ -119,10 +119,11 @@ _APP_START_TIME = time.time()
 # Paths, static files, templates, prompts
 # -------------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-# Static dir (same level as src/) – CSS, JS, images only
-STATIC_DIR = PROJECT_ROOT / "static"
+# App root = directory that contains src/ (e.g. whisperleaf-beta/). STATIC_DIR is always <app>/static.
+_CORE_DIR = Path(__file__).resolve().parent
+_SRC_DIR = _CORE_DIR.parent
+PROJECT_ROOT = _SRC_DIR.parent
+STATIC_DIR = (PROJECT_ROOT / "static").resolve()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

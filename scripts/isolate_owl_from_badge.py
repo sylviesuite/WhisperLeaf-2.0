@@ -11,7 +11,7 @@ Usage:
   python scripts/isolate_owl_from_badge.py
 """
 
-from pathlib import Path
+from pathlib import Path 
 
 try:
     from PIL import Image
