@@ -190,38 +190,58 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         update_step("venv", "done")
         update_progress(80)
 
-        # Determine pip/python inside the venv
+        # Always use venv python to invoke pip — pip.exe may not exist right
+        # after venv creation on all Windows configurations.
         venv_python = VENV_DIR / "Scripts" / "python.exe"
-        venv_pip    = VENV_DIR / "Scripts" / "pip.exe"
 
         # ── 4. Dependencies ────────────────────────────────────────────────────
         update_step("deps", "running")
+
+        # Prefer the requirements.txt extracted from the zip; fall back to the
+        # copy bundled directly inside the installer exe.
         req_file = APP_DIR / "requirements.txt"
         if not req_file.exists():
-            raise RuntimeError(f"requirements.txt not found at {req_file}")
+            bundled_req = resource("requirements.txt")
+            if bundled_req.exists():
+                req_file = bundled_req
+            else:
+                raise RuntimeError(
+                    f"requirements.txt not found at {req_file} "
+                    f"or in the bundled installer resources."
+                )
+
         update_status("Upgrading pip…")
-        run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip", "-q"])
+        r = run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip", "-q"])
+        if r.returncode != 0:
+            raise RuntimeError(f"pip upgrade failed:\n{r.stderr or r.stdout}")
         update_progress(82)
         update_status("Installing dependencies — this may take several minutes…")
 
-        # Stream pip output to update status line
+        # Stream pip output so the user sees live progress
         proc = subprocess.Popen(
-            [str(venv_pip), "install", "-r", str(req_file), "--progress-bar", "off"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            [str(venv_python), "-m", "pip", "install",
+             "-r", str(req_file), "--progress-bar", "off"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         pkg_count = 0
+        pip_errors = []
         for line in proc.stdout:
             line = line.strip()
+            if not line:
+                continue
             if line.startswith("Collecting") or line.startswith("Installing"):
                 pkg_count += 1
                 label = line[:55] + "…" if len(line) > 55 else line
                 update_status(label)
-                # Rough progress: assume ~60 packages, spread from 82→93
                 pct = min(82 + (pkg_count / 60) * 11, 93)
                 update_progress(pct)
+        # Capture stderr for error reporting
+        stderr_out = proc.stderr.read()
         proc.wait()
         if proc.returncode != 0:
-            raise RuntimeError("Dependency installation failed. Check your internet connection and try again.")
+            detail = (stderr_out or "").strip()
+            hint = detail[:200] if detail else "Check your internet connection and try again."
+            raise RuntimeError(f"Dependency installation failed:\n{hint}")
         update_status("Dependencies installed.")
         update_step("deps", "done")
         update_progress(93)
