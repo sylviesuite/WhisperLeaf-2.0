@@ -10,6 +10,9 @@ Getting started is easy:
 
   3. Double-click "Start WhisperLeaf.bat" to launch
 
+  4. Optional: Right-click "Start WhisperLeaf.bat" → Send to → Desktop
+     (create shortcut) for quick access next time.
+
 That's it! WhisperLeaf will open in your browser automatically.
 Everything runs locally — nothing leaves your machine.
 
