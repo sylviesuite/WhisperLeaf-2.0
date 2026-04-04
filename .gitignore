@@ -22,9 +22,16 @@ develop-eggs/
 dist/
 downloads/
 
-# Netlify static site: track beta ZIP (global `downloads/` rule would otherwise ignore this folder)
+# Netlify static site: track beta ZIP and installer (global `downloads/` rule would otherwise ignore this folder)
 !whisperleaf-site/downloads/
 !whisperleaf-site/downloads/*.zip
+!whisperleaf-site/downloads/*.exe
+
+# PyInstaller build artifacts (keep source, ignore outputs)
+installer/build/
+installer/dist/
+installer/__pycache__/
+installer/*.spec
 
 eggs/
 .eggs/
