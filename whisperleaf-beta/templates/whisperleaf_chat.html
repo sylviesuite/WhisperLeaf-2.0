@@ -882,6 +882,61 @@
       outline-offset: 2px;
     }
 
+    /* Model selector */
+    .model-selector-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 1.25rem 0.1rem;
+      flex-wrap: wrap;
+    }
+
+    .model-selector-label {
+      font-size: 0.72rem;
+      color: #6e7681;
+      letter-spacing: 0.04em;
+      margin-right: 0.2rem;
+      white-space: nowrap;
+    }
+
+    .model-btn {
+      font-size: 0.72rem;
+      font-family: inherit;
+      padding: 0.22rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: transparent;
+      color: #8b949e;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .model-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #c9d1d9;
+    }
+
+    .model-btn.active {
+      background: rgba(88, 166, 255, 0.12);
+      border-color: rgba(88, 166, 255, 0.45);
+      color: #58a6ff;
+    }
+
+    .model-btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .model-btn-soon {
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      vertical-align: middle;
+      margin-left: 0.2rem;
+      opacity: 0.7;
+    }
+
     .input-row {
       flex-shrink: 0;
       display: flex;
@@ -3523,6 +3578,12 @@
             <button type="button" class="compose-suggestion-chip" data-prompt="Review something privately">Review something privately</button>
             <button type="button" class="compose-suggestion-chip" data-prompt="How does WhisperLeaf work on my device?">How does WhisperLeaf work on my device?</button>
             <button type="button" class="compose-suggestion-chip" data-prompt="What does 'your data stays with you' mean?">What does 'your data stays with you' mean?</button>
+          </div>
+          <div class="model-selector-row" role="group" aria-label="Select model">
+            <span class="model-selector-label">Model:</span>
+            <button type="button" class="model-btn active" data-model="mistral" aria-pressed="true">Fast (Mistral)</button>
+            <button type="button" class="model-btn" data-model="llama" aria-pressed="false">Balanced (Llama)</button>
+            <button type="button" class="model-btn" data-model="deep" aria-pressed="false" disabled aria-disabled="true">Deep Thinking<span class="model-btn-soon">coming soon</span></button>
           </div>
           <form id="chatForm" class="input-row" aria-label="Send message">
             <textarea

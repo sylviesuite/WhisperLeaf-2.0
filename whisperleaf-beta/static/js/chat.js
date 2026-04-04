@@ -19,6 +19,7 @@ const ChatController = {
     isSending: false,
     sessionId: null,
     currentMode: 'default',
+    selectedModel: 'mistral',
     messages: [],
     currentStreamingId: null,
     streamWatchdog: null,
@@ -80,6 +81,7 @@ const ChatController = {
     this.els.chatWindow = document.getElementById('chatWindow'); // messages-inner: append target
     this.els.messageInput = document.getElementById('messageInput');
     this.els.sendBtn = document.getElementById('sendBtn');
+    this.els.modelBtns = document.querySelectorAll('.model-btn[data-model]');
     this.els.newSessionBtn = document.getElementById('newSessionBtn');
     this.els.clearBtn = document.getElementById('clearBtn');
     this.els.chatForm = document.getElementById('chatForm');
@@ -1041,7 +1043,20 @@ const ChatController = {
   },
 
   bindEvents() {
-    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle, modelRetryBtn } = this.els;
+    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle, modelRetryBtn, modelBtns } = this.els;
+
+    if (modelBtns && modelBtns.length) {
+      modelBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.disabled) return;
+          this.state.selectedModel = btn.dataset.model;
+          modelBtns.forEach((b) => {
+            b.classList.toggle('active', b === btn);
+            b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+          });
+        });
+      });
+    }
 
     if (sidebarToggle && appLayout) {
       sidebarToggle.addEventListener('click', () => {
@@ -2265,6 +2280,7 @@ const ChatController = {
           message: text,
           history: this.getHistoryForApi(),
           session_id: this.state.sessionId,
+          model: this.state.selectedModel,
         }),
         signal: abortController.signal,
       });
