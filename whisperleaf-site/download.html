@@ -9,6 +9,90 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="assets/images/favicon-180x180.png" />
+  <style>
+    .what-to-expect {
+      margin: 2.25rem 0 1.75rem;
+      text-align: left;
+    }
+
+    .what-to-expect-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #c9d1d9;
+      margin: 0 0 1.1rem 0;
+    }
+
+    .expect-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .expect-step {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .expect-step:last-child {
+      border-bottom: none;
+    }
+
+    .expect-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(88, 166, 255, 0.12);
+      border: 1px solid rgba(88, 166, 255, 0.25);
+      color: #58a6ff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .expect-step.step-warn .expect-num {
+      background: rgba(210, 153, 34, 0.12);
+      border-color: rgba(210, 153, 34, 0.3);
+      color: #d29922;
+    }
+
+    .expect-step.step-ok .expect-num {
+      background: rgba(74, 222, 128, 0.1);
+      border-color: rgba(74, 222, 128, 0.25);
+      color: #4ade80;
+    }
+
+    .expect-body {
+      flex: 1;
+    }
+
+    .expect-heading {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin: 0 0 0.25rem 0;
+    }
+
+    .expect-desc {
+      font-size: 0.84rem;
+      color: #8b949e;
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    .expect-reassure {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      color: #6e7681;
+      font-style: italic;
+    }
+  </style>
 </head>
 <body>
   <header class="wl-header">
@@ -52,6 +136,60 @@
         Prefer to set up manually?
         <a href="downloads/whisperleaf-beta.zip" class="link-cta">Download zip instead</a>
       </p>
+
+      <section class="what-to-expect" aria-labelledby="expect-title">
+        <h2 id="expect-title" class="what-to-expect-title">What to expect</h2>
+        <ol class="expect-steps" role="list">
+
+          <li class="expect-step">
+            <div class="expect-num" aria-hidden="true">1</div>
+            <div class="expect-body">
+              <p class="expect-heading">Click the button and wait for the file to save</p>
+              <p class="expect-desc">
+                The installer is about 29 MB — it should download in under a minute on most connections.
+                Your browser will save it to your Downloads folder.
+              </p>
+            </div>
+          </li>
+
+          <li class="expect-step step-warn">
+            <div class="expect-num" aria-hidden="true">2</div>
+            <div class="expect-body">
+              <p class="expect-heading">Windows may warn you about the file</p>
+              <p class="expect-desc">
+                After downloading, you may see a warning at the bottom of your browser.
+                Click the small arrow <strong>next to "Delete"</strong> and choose <strong>"Keep anyway"</strong>.
+              </p>
+              <span class="expect-reassure">This is normal for new software that hasn't been downloaded by millions of people yet.</span>
+            </div>
+          </li>
+
+          <li class="expect-step step-warn">
+            <div class="expect-num" aria-hidden="true">3</div>
+            <div class="expect-body">
+              <p class="expect-heading">A second security screen may appear</p>
+              <p class="expect-desc">
+                When you double-click the installer, Windows SmartScreen may appear.
+                Click <strong>"More options"</strong> (or "More info"), then <strong>"Run anyway"</strong>.
+              </p>
+              <span class="expect-reassure">WhisperLeaf is safe — this warning appears because the app is new and not yet widely recognised by Windows.</span>
+            </div>
+          </li>
+
+          <li class="expect-step step-ok">
+            <div class="expect-num" aria-hidden="true">4</div>
+            <div class="expect-body">
+              <p class="expect-heading">The setup window opens and does everything for you</p>
+              <p class="expect-desc">
+                A progress window will appear and handle the rest — installing the AI, setting everything up,
+                and opening WhisperLeaf in your browser when it's ready.
+                No technical knowledge needed.
+              </p>
+            </div>
+          </li>
+
+        </ol>
+      </section>
 
       <section class="download-reqs" aria-labelledby="download-reqs-title">
         <h2 id="download-reqs-title" class="section-subtitle">System requirements</h2>
