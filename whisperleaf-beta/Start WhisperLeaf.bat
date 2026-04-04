@@ -36,7 +36,7 @@ if not exist ".venv\Scripts\activate.bat" (
 
   call ".venv\Scripts\activate.bat"
   python -m pip install --upgrade pip --quiet
-  pip install -r requirements.txt --quiet
+  pip install -r "%~dp0requirements.txt" --quiet
   if errorlevel 1 (
     echo.
     echo  ERROR: Failed to install dependencies.
