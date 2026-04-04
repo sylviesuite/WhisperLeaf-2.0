@@ -1,0 +1,17 @@
+Welcome to WhisperLeaf Beta!
+============================
+
+Getting started is easy:
+
+  1. Extract this zip folder somewhere on your computer
+     (right-click → "Extract All..." works great)
+
+  2. Open the extracted "whisperleaf-beta" folder
+
+  3. Double-click "Start WhisperLeaf.bat" to launch
+
+That's it! WhisperLeaf will open in your browser automatically.
+Everything runs locally — nothing leaves your machine.
+
+--------------------------------------------------------------
+Need help? Visit: https://whisperleaf.app
