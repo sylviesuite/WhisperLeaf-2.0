@@ -142,9 +142,19 @@ def make_reporthook(progress_fn, start_pct, end_pct, label):
 
 
 def is_installed():
-    """True if a previous install completed successfully."""
+    """True if a previous install completed successfully.
+
+    Requires the venv python, the app source, AND at least one installed
+    package (fastapi) so a partial/interrupted install is not mistaken for
+    a complete one and sent straight to launch.
+    """
     venv_python = VENV_DIR / "Scripts" / "python.exe"
-    return venv_python.exists() and (APP_DIR / "src" / "main.py").exists()
+    fastapi_marker = VENV_DIR / "Lib" / "site-packages" / "fastapi"
+    return (
+        venv_python.exists()
+        and (APP_DIR / "src" / "main.py").exists()
+        and fastapi_marker.exists()
+    )
 
 
 def is_running():
@@ -260,7 +270,12 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         if not zip_path.exists():
             raise RuntimeError(f"App bundle not found: {zip_path}")
         if APP_DIR.exists():
-            shutil.rmtree(APP_DIR)
+            try:
+                shutil.rmtree(APP_DIR)
+            except PermissionError as e:
+                log(f"rmtree blocked ({e}) — installing on top of existing directory")
+                # A locked .venv means deps are likely already installed;
+                # is_installed() should have caught this, but proceed safely.
         INSTALL_DIR.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(zip_path) as zf:
             members = zf.namelist()
