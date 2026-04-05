@@ -17,6 +17,28 @@ import urllib.request
 import time
 import ctypes
 import webbrowser
+import datetime
+
+# ── Log file (always written to the user's Desktop) ───────────────────────────
+LOG_PATH = pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")) / "Desktop" / "whisperleaf-install.log"
+
+def _log(msg):
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    line = f"[{ts}] {msg}"
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass  # never let logging crash the installer
+
+def log(msg):
+    _log(msg)
+
+def log_section(title):
+    _log("")
+    _log(f"{'─' * 50}")
+    _log(f"  {title}")
+    _log(f"{'─' * 50}")
 
 # ── Install location ───────────────────────────────────────────────────────────
 INSTALL_DIR = pathlib.Path(os.environ.get("LOCALAPPDATA", "C:/Users/Public")) / "WhisperLeaf"
@@ -67,7 +89,14 @@ def resource(filename):
 
 
 def run(cmd, **kwargs):
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    log(f"RUN: {' '.join(str(c) for c in cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    if result.stdout.strip():
+        log(f"  stdout: {result.stdout.strip()[:400]}")
+    if result.stderr.strip():
+        log(f"  stderr: {result.stderr.strip()[:400]}")
+    log(f"  exit: {result.returncode}")
+    return result
 
 
 def find_python():
@@ -114,16 +143,33 @@ def make_reporthook(progress_fn, start_pct, end_pct, label):
 # ── Installation logic ────────────────────────────────────────────────────────
 
 def install(update_step, update_status, update_progress, done_cb, error_cb):
+    # Start fresh log for this run
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_PATH, "w", encoding="utf-8") as f:
+            f.write(f"WhisperLeaf Installer — {datetime.datetime.now()}\n")
+            f.write(f"Python: {sys.version}\n")
+            f.write(f"Frozen: {hasattr(sys, '_MEIPASS')}\n")
+            f.write(f"MEIPASS: {getattr(sys, '_MEIPASS', 'n/a')}\n")
+            f.write(f"INSTALL_DIR: {INSTALL_DIR}\n")
+            f.write(f"APP_DIR: {APP_DIR}\n")
+            f.write(f"VENV_DIR: {VENV_DIR}\n\n")
+    except Exception as e:
+        pass  # can't write log — proceed anyway
+
     try:
         # ── 1. Python ──────────────────────────────────────────────────────────
+        log_section("STEP 1: Check Python")
         update_step("python", "running")
         update_status("Checking for Python…")
         py = find_python()
         if py:
+            log(f"Python found: {py}")
             update_status(f"Python found ({py})")
             update_step("python", "done")
             update_progress(8)
         else:
+            log("Python not found — will download installer")
             update_status("Python not found — downloading installer…")
             tmp = pathlib.Path(os.environ.get("TEMP", INSTALL_DIR)) / "python_installer.exe"
             urllib.request.urlretrieve(
@@ -148,9 +194,11 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
             update_progress(70)
 
         # ── 2. Extract app files ───────────────────────────────────────────────
+        log_section("STEP 2: Extract app files")
         update_step("app", "running")
         update_status("Installing WhisperLeaf…")
         zip_path = resource("whisperleaf-beta.zip")
+        log(f"zip_path: {zip_path}  exists={zip_path.exists()}")
         if not zip_path.exists():
             raise RuntimeError(f"App bundle not found: {zip_path}")
         if APP_DIR.exists():
@@ -174,13 +222,16 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                         shutil.copyfileobj(src, out)
                 pct = 70 + (i / total) * 6
                 update_progress(pct)
+        log(f"Extracted to: {APP_DIR}")
         update_status("WhisperLeaf files installed.")
         update_step("app", "done")
         update_progress(76)
 
         # ── 3. Virtual environment ─────────────────────────────────────────────
+        log_section("STEP 3: Virtual environment")
         update_step("venv", "running")
         if VENV_DIR.exists():
+            log("venv already exists — reusing")
             update_status("Virtual environment already exists, reusing.")
         else:
             update_status("Creating virtual environment…")
@@ -193,15 +244,19 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         # Always use venv python to invoke pip — pip.exe may not exist right
         # after venv creation on all Windows configurations.
         venv_python = VENV_DIR / "Scripts" / "python.exe"
+        log(f"venv_python: {venv_python}  exists={venv_python.exists()}")
 
         # ── 4. Dependencies ────────────────────────────────────────────────────
+        log_section("STEP 4: Install dependencies")
         update_step("deps", "running")
 
         # Prefer the requirements.txt extracted from the zip; fall back to the
         # copy bundled directly inside the installer exe.
         req_file = APP_DIR / "requirements.txt"
+        log(f"req_file (primary): {req_file}  exists={req_file.exists()}")
         if not req_file.exists():
             bundled_req = resource("requirements.txt")
+            log(f"req_file (bundled fallback): {bundled_req}  exists={bundled_req.exists()}")
             if bundled_req.exists():
                 req_file = bundled_req
             else:
@@ -209,6 +264,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                     f"requirements.txt not found at {req_file} "
                     f"or in the bundled installer resources."
                 )
+        log(f"Using req_file: {req_file}")
 
         update_status("Upgrading pip…")
         r = run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip", "-q"])
@@ -216,6 +272,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
             raise RuntimeError(f"pip upgrade failed:\n{r.stderr or r.stdout}")
         update_progress(82)
         update_status("Installing dependencies — this may take several minutes…")
+        log(f"RUN pip install -r {req_file}")
 
         # Merge stderr into stdout to avoid pipe buffer deadlock.
         # (Reading stdout line-by-line while stderr has a separate pipe causes
@@ -230,6 +287,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         last_lines = []   # keep a rolling tail for error reporting
         for line in proc.stdout:
             line = line.strip()
+            log(f"  pip: {line}")   # log every line from pip
             if not line:
                 continue
             last_lines.append(line)
@@ -242,6 +300,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                 pct = min(82 + (pkg_count / 60) * 11, 93)
                 update_progress(pct)
         proc.wait()
+        log(f"pip exit code: {proc.returncode}")
         if proc.returncode != 0:
             tail = "\n".join(last_lines[-10:])
             raise RuntimeError(f"Dependency installation failed:\n{tail}")
@@ -352,6 +411,10 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         done_cb()
 
     except Exception as exc:
+        import traceback
+        log_section("INSTALL FAILED")
+        log(traceback.format_exc())
+        log(f"Error shown to user: {exc}")
         error_cb(str(exc))
 
 
@@ -488,9 +551,13 @@ class InstallerApp(tk.Tk):
             for key, icon in self._step_icons.items():
                 if icon.cget("text") == "▶":
                     self._update_step(key, "error")
-            # Show a retry hint
-            tk.Label(self, text="Installation failed. Close this window and try again.",
-                     font=("Segoe UI", 9), bg=BG, fg=RED).pack(pady=(0, 10))
+            # Show log file location and retry hint
+            tk.Label(self, text=f"Log saved to: {LOG_PATH}",
+                     font=("Segoe UI", 8), bg=BG, fg=MUTED,
+                     wraplength=440).pack(pady=(4, 0))
+            tk.Label(self, text="Close this window and try again, or send the log file for support.",
+                     font=("Segoe UI", 9), bg=BG, fg=RED,
+                     wraplength=440).pack(pady=(2, 10))
         self.after(0, _do)
 
     # ── Start ─────────────────────────────────────────────────────────────────
