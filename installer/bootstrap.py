@@ -18,6 +18,7 @@ import time
 import ctypes
 import webbrowser
 import datetime
+import socket
 
 # ── Log file (always written to the user's Desktop) ───────────────────────────
 LOG_PATH = pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")) / "Desktop" / "whisperleaf-install.log"
@@ -140,6 +141,21 @@ def make_reporthook(progress_fn, start_pct, end_pct, label):
     return hook
 
 
+def is_installed():
+    """True if a previous install completed successfully."""
+    venv_python = VENV_DIR / "Scripts" / "python.exe"
+    return venv_python.exists() and (APP_DIR / "src" / "main.py").exists()
+
+
+def is_running():
+    """True if something is already listening on the app port."""
+    try:
+        with socket.create_connection(("127.0.0.1", APP_PORT), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
 # ── Installation logic ────────────────────────────────────────────────────────
 
 def install(update_step, update_status, update_progress, done_cb, error_cb):
@@ -158,6 +174,48 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         pass  # can't write log — proceed anyway
 
     try:
+        # ── Already running? Just open the browser ─────────────────────────────
+        if is_running():
+            log("App already running on port 8000 — opening browser")
+            for key, _ in STEPS:
+                update_step(key, "done")
+            update_progress(100)
+            update_status("WhisperLeaf is already running — opening in your browser…")
+            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/")
+            done_cb()
+            return
+
+        # ── Already installed? Skip straight to launch ─────────────────────────
+        if is_installed():
+            log("Existing install found — skipping to launch")
+            for key, _ in STEPS[:-1]:   # mark everything except "launch" as done
+                update_step(key, "done")
+            update_progress(99)
+            update_status("WhisperLeaf is already installed — launching…")
+
+            venv_python = VENV_DIR / "Scripts" / "python.exe"
+            update_step("launch", "running")
+            bat = APP_DIR / "Start WhisperLeaf.bat"
+            if bat.exists():
+                subprocess.Popen(
+                    ["cmd", "/c", str(bat)],
+                    cwd=str(APP_DIR),
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            else:
+                subprocess.Popen(
+                    [str(venv_python), "-m", "uvicorn", "src.main:app",
+                     "--host", "127.0.0.1", "--port", str(APP_PORT)],
+                    cwd=str(APP_DIR),
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            time.sleep(4)
+            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/")
+            update_step("launch", "done")
+            update_progress(100)
+            done_cb()
+            return
+
         # ── 1. Python ──────────────────────────────────────────────────────────
         log_section("STEP 1: Check Python")
         update_step("python", "running")
