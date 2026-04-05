@@ -217,31 +217,34 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
         update_progress(82)
         update_status("Installing dependencies — this may take several minutes…")
 
-        # Stream pip output so the user sees live progress
+        # Merge stderr into stdout to avoid pipe buffer deadlock.
+        # (Reading stdout line-by-line while stderr has a separate pipe causes
+        # a deadlock once pip's stderr output fills the OS pipe buffer.)
         proc = subprocess.Popen(
             [str(venv_python), "-m", "pip", "install",
              "-r", str(req_file), "--progress-bar", "off"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            encoding="utf-8", errors="replace"
         )
         pkg_count = 0
-        pip_errors = []
+        last_lines = []   # keep a rolling tail for error reporting
         for line in proc.stdout:
             line = line.strip()
             if not line:
                 continue
+            last_lines.append(line)
+            if len(last_lines) > 20:
+                last_lines.pop(0)
             if line.startswith("Collecting") or line.startswith("Installing"):
                 pkg_count += 1
                 label = line[:55] + "…" if len(line) > 55 else line
                 update_status(label)
                 pct = min(82 + (pkg_count / 60) * 11, 93)
                 update_progress(pct)
-        # Capture stderr for error reporting
-        stderr_out = proc.stderr.read()
         proc.wait()
         if proc.returncode != 0:
-            detail = (stderr_out or "").strip()
-            hint = detail[:200] if detail else "Check your internet connection and try again."
-            raise RuntimeError(f"Dependency installation failed:\n{hint}")
+            tail = "\n".join(last_lines[-10:])
+            raise RuntimeError(f"Dependency installation failed:\n{tail}")
         update_status("Dependencies installed.")
         update_step("deps", "done")
         update_progress(93)
