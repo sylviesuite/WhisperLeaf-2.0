@@ -64,7 +64,7 @@ if %errorlevel%==0 (
 
 REM ── 4. Launch ────────────────────────────────────────────────────────────────
 echo  Starting WhisperLeaf...
-start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:8000/"
+start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:8000/chat"
 
 python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
 if errorlevel 1 (

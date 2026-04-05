@@ -181,7 +181,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                 update_step(key, "done")
             update_progress(100)
             update_status("WhisperLeaf is already running — opening in your browser…")
-            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/")
+            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/chat")
             done_cb()
             return
 
@@ -210,7 +210,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
             time.sleep(4)
-            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/")
+            webbrowser.open(f"http://127.0.0.1:{APP_PORT}/chat")
             update_step("launch", "done")
             update_progress(100)
             done_cb()
@@ -463,7 +463,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
 
         # Give the server a moment to start, then open browser
         time.sleep(4)
-        webbrowser.open(f"http://127.0.0.1:{APP_PORT}/")
+        webbrowser.open(f"http://127.0.0.1:{APP_PORT}/chat")
         update_step("launch", "done")
         update_progress(100)
         done_cb()
