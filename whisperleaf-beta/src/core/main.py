@@ -672,10 +672,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+# Map frontend model selector keys → Ollama model names
+MODEL_NAME_MAP: Dict[str, str] = {
+    "mistral": "mistral:latest",
+    "llama":   "llama3.2:latest",
+    "deep":    "llama3.1:8b",   # placeholder until a larger model is available
+}
+
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
     session_id: Optional[str] = None
+    model: Optional[str] = None   # frontend selector key, e.g. 'mistral' | 'llama' | 'deep'
 
 
 class ChatResponse(BaseModel):
@@ -1005,7 +1013,10 @@ async def chat_endpoint(payload: ChatRequest):
     managed on the client. Supports "remember: ..." and "no memory: ...".
     """
     raw_message = (payload.message or "").strip()
-    print("[WhisperLeaf chat] POST /api/chat message_len=%s history_len=%s" % (len(raw_message), len(payload.history or [])))
+    # Resolve frontend model key → Ollama model name, falling back to default
+    resolved_model: Optional[str] = MODEL_NAME_MAP.get(payload.model or "", None)
+    print("[WhisperLeaf chat] POST /api/chat message_len=%s history_len=%s model=%s->%s" % (
+        len(raw_message), len(payload.history or []), payload.model, resolved_model or model_client.model_name))
 
     # Reject empty messages so the client always gets a well-formed response
     if not raw_message:
@@ -2048,7 +2059,7 @@ async def chat_endpoint(payload: ChatRequest):
 
                 # Simple/tradeoff enforcement: buffered generation + one rewrite pass.
                 if simple_query or tradeoff_query:
-                    reply = await model_client.chat(effective_system, messages)
+                    reply = await model_client.chat(effective_system, messages, model=resolved_model)
                     reply = (reply or "").strip()
                     ok = _validate_simple_reply(reply) if simple_query else _validate_tradeoff_reply(reply)
                     if not ok:
@@ -2072,7 +2083,7 @@ async def chat_endpoint(payload: ChatRequest):
                                 "Original:\n"
                             )
                         rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
-                        reply2 = await model_client.chat(effective_system, rewrite_messages)
+                        reply2 = await model_client.chat(effective_system, rewrite_messages, model=resolved_model)
                         reply2 = (reply2 or "").strip()
                         ok2 = _validate_simple_reply(reply2) if simple_query else _validate_tradeoff_reply(reply2)
                         reply = reply2 if ok2 else reply
@@ -2106,7 +2117,7 @@ async def chat_endpoint(payload: ChatRequest):
                             "Original output:\n"
                         )
                         rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
-                        reply2 = await model_client.chat(effective_system, rewrite_messages)
+                        reply2 = await model_client.chat(effective_system, rewrite_messages, model=resolved_model)
                         reply2 = (reply2 or "").strip()
                         v2 = validate_execution_output(reply2)
                         if v2.get("ok"):
@@ -2139,7 +2150,7 @@ async def chat_endpoint(payload: ChatRequest):
                 # Stream chunks to the client as they arrive.
                 # Note: we still apply internal-leak rewriting to the final stored reply when needed,
                 # but we do not buffer the entire response before emitting any content (avoids long silence/timeouts).
-                async for chunk in model_client.chat_stream(effective_system, messages):
+                async for chunk in model_client.chat_stream(effective_system, messages, model=resolved_model):
                     full_reply += chunk
                     chunk_count += 1
                     if chunk_count == 1:

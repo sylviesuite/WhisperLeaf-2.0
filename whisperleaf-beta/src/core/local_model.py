@@ -45,7 +45,7 @@ class LocalModelClient:
         )
         self.timeout = timeout
 
-    async def chat(self, system_prompt: str, messages: List[Dict[str, str]]) -> str:
+    async def chat(self, system_prompt: str, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
         """
         Send a chat completion request to the local model.
 
@@ -59,7 +59,7 @@ class LocalModelClient:
             *messages,
         ]
         payload: Dict[str, Any] = {
-            "model": self.model_name,
+            "model": model or self.model_name,
             "messages": full_messages,
             "stream": False,
             "options": {"num_ctx": 4096},
@@ -94,7 +94,7 @@ class LocalModelClient:
         return content
 
     async def chat_stream(
-        self, system_prompt: str, messages: List[Dict[str, str]]
+        self, system_prompt: str, messages: List[Dict[str, str]], model: Optional[str] = None
     ) -> AsyncIterator[str]:
         """
         Stream chat completion from the local model (Ollama-style NDJSON).
@@ -106,7 +106,7 @@ class LocalModelClient:
             *messages,
         ]
         payload: Dict[str, Any] = {
-            "model": self.model_name,
+            "model": model or self.model_name,
             "messages": full_messages,
             "stream": True,
             "options": {"num_ctx": 4096},
@@ -116,7 +116,7 @@ class LocalModelClient:
         print(
             "[WhisperLeaf model debug] chat_stream start",
             "MODEL_ENDPOINT=", model_endpoint,
-            "MODEL_NAME=", self.model_name,
+            "MODEL_NAME=", model or self.model_name,
             "PROMPT_LENGTH=", prompt_length,
         )
 
