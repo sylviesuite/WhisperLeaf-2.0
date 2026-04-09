@@ -3,6 +3,7 @@ Main FastAPI application for Sovereign AI / WhisperLeaf.
 """
 
 from pathlib import Path
+import asyncio
 import json
 import os
 import re
@@ -672,18 +673,10 @@ class ChatMessage(BaseModel):
     content: str
 
 
-# Map frontend model selector keys → Ollama model names
-MODEL_NAME_MAP: Dict[str, str] = {
-    "mistral": "mistral:latest",
-    "llama":   "llama3.2:latest",
-    "deep":    "llama3.1:8b",   # placeholder until a larger model is available
-}
-
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
     session_id: Optional[str] = None
-    model: Optional[str] = None   # frontend selector key, e.g. 'mistral' | 'llama' | 'deep'
 
 
 class ChatResponse(BaseModel):
@@ -841,17 +834,22 @@ REWRITE_QUERY_SYSTEM = (
 )
 
 
-async def _rewrite_memory_query(user_message: str) -> str:
+async def _rewrite_memory_query(user_message: str, model: Optional[str] = None) -> str:
     """
     Rewrite the user message into a short semantic retrieval query.
     On failure or empty result, returns the original message (caller should still fall back).
+    If no model is provided, skips the LLM call and returns the original message directly.
     """
     if not (user_message or "").strip():
+        return (user_message or "").strip()
+    # Skip the rewrite if no model is known — avoids triggering a pull of an uninstalled default model.
+    if not model:
         return (user_message or "").strip()
     try:
         reply = await model_client.chat(
             REWRITE_QUERY_SYSTEM,
             [{"role": "user", "content": (user_message or "").strip()}],
+            model=model,
         )
         if not reply:
             return (user_message or "").strip()
@@ -1013,10 +1011,8 @@ async def chat_endpoint(payload: ChatRequest):
     managed on the client. Supports "remember: ..." and "no memory: ...".
     """
     raw_message = (payload.message or "").strip()
-    # Resolve frontend model key → Ollama model name, falling back to default
-    resolved_model: Optional[str] = MODEL_NAME_MAP.get(payload.model or "", None)
-    print("[WhisperLeaf chat] POST /api/chat message_len=%s history_len=%s model=%s->%s" % (
-        len(raw_message), len(payload.history or []), payload.model, resolved_model or model_client.model_name))
+    print("[WhisperLeaf chat] POST /api/chat message_len=%s history_len=%s model=%s" % (
+        len(raw_message), len(payload.history or []), model_client.model_name))
 
     # Reject empty messages so the client always gets a well-formed response
     if not raw_message:
@@ -1196,7 +1192,7 @@ async def chat_endpoint(payload: ChatRequest):
     memory_block = ""
     memory_snippets: List[str] = []
     try:
-        memory_query = await _rewrite_memory_query(message_for_model)
+        memory_query = await _rewrite_memory_query(message_for_model, model=model_client.model_name)
         if not (memory_query or "").strip():
             memory_query = message_for_model
         # Use the live user message for pivot/relevance detection; use rewritten query only for retrieval.
@@ -1967,11 +1963,11 @@ async def chat_endpoint(payload: ChatRequest):
         if len(session_list) >= len(existing):
             CHAT_SESSIONS[session_id] = session_list
 
-    # When beyond context window: summarize older portion and store as session memory, then trim
+    # When beyond context window: summarize older portion in background, then trim
     if len(messages) > MAX_CONTEXT_MESSAGES:
         older_count = len(messages) - MAX_CONTEXT_MESSAGES
         if session_id and older_count > 0:
-            await _summarize_and_store_older(session_id, messages[:older_count])
+            asyncio.create_task(_summarize_and_store_older(session_id, messages[:older_count]))
         messages = messages[-MAX_CONTEXT_MESSAGES:]
 
     # Include conversation summary in system context when present (so model sees prior context)
@@ -2010,127 +2006,6 @@ async def chat_endpoint(payload: ChatRequest):
                 })
                 yield _sse_message("meta", meta)
             try:
-                simple_query = detect_simple_query(message_for_model)
-                tradeoff_query = detect_tradeoff_query(message_for_model)
-                # Creative output is often multi-line; do not force simple/tradeoff validators on it.
-                if response_mode == ResponseMode.CREATIVE:
-                    simple_query = False
-                    tradeoff_query = False
-
-                def _count_sentences(s: str) -> int:
-                    return len(re.findall(r"[.!?]+", (s or "").strip()))
-
-                def _contains_teaching(s: str) -> bool:
-                    low = (s or "").lower()
-                    return any(p in low for p in ("can be thought of as", "this means", "in this case"))
-
-                def _validate_simple_reply(s: str) -> bool:
-                    t = (s or "").strip()
-                    if not t:
-                        return False
-                    if _contains_teaching(t):
-                        return False
-                    # Direct answer only (single sentence/line).
-                    if _count_sentences(t) > 1:
-                        return False
-                    if "\n" in t:
-                        return False
-                    return True
-
-                def _validate_tradeoff_reply(s: str) -> bool:
-                    t = (s or "").strip()
-                    if not t:
-                        return False
-                    # Max 3 sentences total (2-line main + 1 insight).
-                    if _count_sentences(t) > 3:
-                        return False
-                    lines = [ln for ln in t.splitlines() if ln.strip()]
-                    if len(lines) > 3:
-                        return False
-                    if len(lines) < 2:
-                        return False
-                    # Teaching language only allowed if user asked why/how.
-                    if not any(w in (message_for_model or "").lower() for w in ("why", "how")) and _contains_teaching(t):
-                        return False
-                    # Require an insight line for tradeoff triggers.
-                    if len(lines) < 3:
-                        return False
-                    return True
-
-                # Simple/tradeoff enforcement: buffered generation + one rewrite pass.
-                if simple_query or tradeoff_query:
-                    reply = await model_client.chat(effective_system, messages, model=resolved_model)
-                    reply = (reply or "").strip()
-                    ok = _validate_simple_reply(reply) if simple_query else _validate_tradeoff_reply(reply)
-                    if not ok:
-                        if simple_query:
-                            rewrite_instructions = (
-                                "Rewrite to comply exactly:\n"
-                                "- Output ONLY the direct answer.\n"
-                                "- No explanation, no teaching ('this means', 'can be thought of as', 'in this case').\n"
-                                "- No insight sentence.\n"
-                                "- One line only.\n\n"
-                                "Original:\n"
-                            )
-                        else:
-                            rewrite_instructions = (
-                                "Rewrite to comply exactly:\n"
-                                "- Line 1–2: main answer (max two short lines).\n"
-                                "- Line 3: ONE insight sentence (15–20 words) stating a tradeoff/pattern/implication.\n"
-                                "- Total <= 3 sentences.\n"
-                                "- No teaching language unless the user asked 'why' or 'how'.\n"
-                                "- No questions.\n\n"
-                                "Original:\n"
-                            )
-                        rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
-                        reply2 = await model_client.chat(effective_system, rewrite_messages, model=resolved_model)
-                        reply2 = (reply2 or "").strip()
-                        ok2 = _validate_simple_reply(reply2) if simple_query else _validate_tradeoff_reply(reply2)
-                        reply = reply2 if ok2 else reply
-                    if user_mode != "execution" and not allows_internal_codebase_context(message_for_model):
-                        if response_contains_internal_leak(reply):
-                            reply = await rewrite_reply_without_internals(model_client, reply)
-                    full_reply = reply
-                    yield _sse_message("chunk", full_reply)
-                    yield _sse_message("done", "")
-                    if session_id and session_id in CHAT_SESSIONS:
-                        CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
-                    return
-
-                # Execution-mode stabilization: generate full artifact, validate, optionally rewrite once.
-                if user_mode == "execution":
-                    reply = await model_client.chat(effective_system, messages)
-                    reply = (reply or "").strip()
-                    v1 = validate_execution_output(reply)
-                    if not v1.get("ok"):
-                        # One internal rewrite pass (no extra user-visible text).
-                        rewrite_instructions = (
-                            "Rewrite the output to comply EXACTLY with the required execution artifact format:\n"
-                            "- Objective (1 line)\n"
-                            "- Requirements (numbered)\n"
-                            "- Files/Functions to update\n"
-                            "- Tests\n"
-                            "No intro/outro prose. Must reference at least one real component path.\n"
-                            "Brevity: keep each section minimal; Requirements <= 6 items; Tests <= 4 items.\n"
-                            "Avoid filler phrases: 'ensure that', 'make sure to', 'you should', 'consider'.\n"
-                            "Avoid phrases: 'this prompt', 'you can use', 'for example'.\n\n"
-                            "Original output:\n"
-                        )
-                        rewrite_messages = messages + [{"role": "user", "content": rewrite_instructions + reply}]
-                        reply2 = await model_client.chat(effective_system, rewrite_messages, model=resolved_model)
-                        reply2 = (reply2 or "").strip()
-                        v2 = validate_execution_output(reply2)
-                        if v2.get("ok"):
-                            reply = reply2
-                        else:
-                            reply = strip_to_execution_artifact(reply2 or reply)
-                    full_reply = trim_execution_artifact(reply)
-                    yield _sse_message("chunk", full_reply)
-                    yield _sse_message("done", "")
-                    if session_id and session_id in CHAT_SESSIONS:
-                        CHAT_SESSIONS[session_id].append({"role": "assistant", "content": full_reply})
-                    return
-
                 chunk_count = 0
                 # Emit a status event before we call the local model so the client can show
                 # a warmup indicator even if the first token takes a while.
@@ -2150,7 +2025,7 @@ async def chat_endpoint(payload: ChatRequest):
                 # Stream chunks to the client as they arrive.
                 # Note: we still apply internal-leak rewriting to the final stored reply when needed,
                 # but we do not buffer the entire response before emitting any content (avoids long silence/timeouts).
-                async for chunk in model_client.chat_stream(effective_system, messages, model=resolved_model):
+                async for chunk in model_client.chat_stream(effective_system, messages, model=model_client.model_name):
                     full_reply += chunk
                     chunk_count += 1
                     if chunk_count == 1:
@@ -2182,7 +2057,7 @@ async def chat_endpoint(payload: ChatRequest):
                 else:
                     yield _sse_message("error", "Local model error: %s" % (e,))
             except Exception as e:
-                print("[WhisperLeaf chat] unexpected error: %s" % e)
+                print("[WhisperLeaf chat] unexpected error type=%s: %s" % (type(e).__name__, e))
                 yield _sse_message("error", "Something went wrong. Please try again.")
         except (BrokenPipeError, ConnectionResetError) as e:
             print("[WhisperLeaf] client disconnected or connection reset: %s" % e)

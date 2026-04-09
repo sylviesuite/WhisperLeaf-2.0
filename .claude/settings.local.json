@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wmic process:*)",
+      "Bash(kill -0 36602)",
+      "Bash(cmd /c \"taskkill /PID 3660 /F 2>&1\")",
+      "Bash(netstat -ano)",
+      "Bash(powershell:*)",
+      "Bash(tasklist:*)",
+      "Bash(cmd:*)"
+    ]
+  }
+}

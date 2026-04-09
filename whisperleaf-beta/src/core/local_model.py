@@ -31,7 +31,7 @@ class LocalModelClient:
         self,
         base_url: Optional[str] = None,
         model_name: Optional[str] = None,
-        timeout: float = 120.0,
+        timeout: float = 300.0,
     ) -> None:
         self.base_url = (
             base_url
@@ -41,7 +41,7 @@ class LocalModelClient:
         self.model_name = (
             model_name
             or os.getenv("WHISPERLEAF_MODEL_NAME")
-            or "llama3.2"
+            or "llama3.2:latest"
         )
         self.timeout = timeout
 
@@ -62,7 +62,7 @@ class LocalModelClient:
             "model": model or self.model_name,
             "messages": full_messages,
             "stream": False,
-            "options": {"num_ctx": 4096},
+            "options": {"num_ctx": 8192},
         }
 
         model_endpoint = f"{self.base_url}/api/chat"
@@ -109,7 +109,7 @@ class LocalModelClient:
             "model": model or self.model_name,
             "messages": full_messages,
             "stream": True,
-            "options": {"num_ctx": 4096},
+            "options": {"num_ctx": 8192},
         }
         model_endpoint = f"{self.base_url}/api/chat"
         prompt_length = sum(len(m.get("content", "")) for m in full_messages)

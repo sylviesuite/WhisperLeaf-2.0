@@ -19,7 +19,6 @@ const ChatController = {
     isSending: false,
     sessionId: null,
     currentMode: 'default',
-    selectedModel: 'mistral',
     messages: [],
     currentStreamingId: null,
     streamWatchdog: null,
@@ -81,7 +80,6 @@ const ChatController = {
     this.els.chatWindow = document.getElementById('chatWindow'); // messages-inner: append target
     this.els.messageInput = document.getElementById('messageInput');
     this.els.sendBtn = document.getElementById('sendBtn');
-    this.els.modelBtns = document.querySelectorAll('.model-btn[data-model]');
     this.els.newSessionBtn = document.getElementById('newSessionBtn');
     this.els.clearBtn = document.getElementById('clearBtn');
     this.els.chatForm = document.getElementById('chatForm');
@@ -1043,20 +1041,7 @@ const ChatController = {
   },
 
   bindEvents() {
-    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle, modelRetryBtn, modelBtns } = this.els;
-
-    if (modelBtns && modelBtns.length) {
-      modelBtns.forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (btn.disabled) return;
-          this.state.selectedModel = btn.dataset.model;
-          modelBtns.forEach((b) => {
-            b.classList.toggle('active', b === btn);
-            b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
-          });
-        });
-      });
-    }
+    const { chatForm, messageInput, chatMessages, jumpBottomBtn, clearBtn, newSessionBtn, chatOwl, appLayout, sidebarToggle, modelRetryBtn } = this.els;
 
     if (sidebarToggle && appLayout) {
       sidebarToggle.addEventListener('click', () => {
@@ -1416,6 +1401,90 @@ const ChatController = {
     this.state.streamWatchdogStage = 0;
   },
 
+  // --- Markdown renderer (no external deps)
+  renderMarkdown(text) {
+    if (!text) return '';
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // 1. Extract fenced code blocks before any escaping
+    const codeBlocks = [];
+    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+      const idx = codeBlocks.length;
+      const escaped = esc(code.replace(/^\n/, '').replace(/\n$/, ''));
+      const cls = lang ? ` class="language-${esc(lang)}"` : '';
+      codeBlocks.push(`<pre><code${cls}>${escaped}</code></pre>`);
+      return `\x00BLK${idx}\x00`;
+    });
+
+    // 2. Extract inline code
+    const inlineCodes = [];
+    text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+      const idx = inlineCodes.length;
+      inlineCodes.push(`<code>${esc(code)}</code>`);
+      return `\x00INL${idx}\x00`;
+    });
+
+    // 3. Escape remaining HTML
+    text = esc(text);
+
+    // 4. Block-level: headers
+    text = text.replace(/^#{3} (.+)$/gm, '<h3>$1</h3>');
+    text = text.replace(/^#{2} (.+)$/gm, '<h2>$1</h2>');
+    text = text.replace(/^#{1} (.+)$/gm, '<h1>$1</h1>');
+
+    // 5. Horizontal rule
+    text = text.replace(/^---+$/gm, '<hr>');
+
+    // 6. Inline: bold+italic, bold, italic, links
+    text = text.replace(/\*\*\*([^*\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    text = text.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    text = text.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+    // Links: [text](url) — open in new tab, safety: only http/https URLs
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    // 7. Lists (consecutive items grouped into ul/ol)
+    const lines = text.split('\n');
+    const out = [];
+    let inUl = false, inOl = false;
+    for (const line of lines) {
+      const ul = line.match(/^[ \t]*[-*+] (.+)/);
+      const ol = line.match(/^[ \t]*\d+\. (.+)/);
+      if (ul) {
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        if (!inUl) { out.push('<ul>'); inUl = true; }
+        out.push(`<li>${ul[1]}</li>`);
+      } else if (ol) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (!inOl) { out.push('<ol>'); inOl = true; }
+        out.push(`<li>${ol[1]}</li>`);
+      } else {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        out.push(line);
+      }
+    }
+    if (inUl) out.push('</ul>');
+    if (inOl) out.push('</ol>');
+    text = out.join('\n');
+
+    // 8. Paragraphs: wrap non-block runs in <p>, convert lone newlines to <br>
+    const blockTag = /^<(h[1-6]|ul|ol|li|pre|hr|blockquote)/;
+    text = text.split(/\n{2,}/).map(para => {
+      para = para.trim();
+      if (!para) return '';
+      if (blockTag.test(para)) return para;
+      return '<p>' + para.replace(/\n/g, '<br>') + '</p>';
+    }).join('\n');
+
+    // 9. Restore placeholders
+    text = text.replace(/\x00BLK(\d+)\x00/g, (_, i) => codeBlocks[+i]);
+    text = text.replace(/\x00INL(\d+)\x00/g, (_, i) => inlineCodes[+i]);
+
+    return text;
+  },
+
   // --- Copy button (assistant messages only)
   addCopyButtonToBubble(bubble, getText) {
     const btn = document.createElement('button');
@@ -1550,7 +1619,7 @@ const ChatController = {
       bodyWrap.className = 'message-body-wrap';
       const body = document.createElement('span');
       body.className = 'message-body';
-      body.textContent = msg.content || '';
+      body.innerHTML = this.renderMarkdown(msg.content || '');
       bodyWrap.appendChild(body);
       const ctx = msg.contextUsed;
       if (ctx && ctx.docSources && ctx.docSources.length > 0) {
@@ -1723,7 +1792,7 @@ const ChatController = {
       bodyWrap.className = 'message-body-wrap';
       const body = document.createElement('span');
       body.className = 'message-body';
-      body.textContent = finalContent;
+      body.innerHTML = this.renderMarkdown(finalContent);
       bodyWrap.appendChild(body);
       const sources = this.state.docSourcesForCurrentResponse || [];
       const excerpts = this.state.docExcerptsForCurrentResponse || [];
@@ -2063,6 +2132,22 @@ const ChatController = {
 
     const isActiveStream = () => streamId === this.state.currentStreamId;
 
+    // Debounce DOM updates via requestAnimationFrame so that when many tokens arrive
+    // in a single reader.read() batch they still render incrementally (one paint per frame)
+    // rather than all at once. fullReply is captured by reference so the rAF callback
+    // always paints the most recent accumulated text.
+    let pendingRaf = null;
+    const scheduleStreamUpdate = () => {
+      if (pendingRaf) return;
+      pendingRaf = requestAnimationFrame(() => {
+        pendingRaf = null;
+        if (!isActiveStream()) return;
+        const sid = this.state.currentStreamingId;
+        if (sid) this.updateMessage(sid, { content: fullReply });
+        this.updateStreamingBubble(fullReply);
+      });
+    };
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -2088,9 +2173,7 @@ const ChatController = {
           }
           if (isActiveStream()) {
             this.setSendingState(false);
-            const sid = this.state.currentStreamingId;
-            if (sid) this.updateMessage(sid, { content: fullReply });
-            this.updateStreamingBubble(fullReply);
+            scheduleStreamUpdate();
           }
         } else if (event === 'status') {
           if (isActiveStream()) {
@@ -2143,6 +2226,11 @@ const ChatController = {
             } catch (_) {}
           }
         } else if (event === 'done') {
+          if (pendingRaf) { cancelAnimationFrame(pendingRaf); pendingRaf = null; }
+          // Flush final content synchronously so finalizeStreamingBubble reads the right text
+          const _sid = this.state.currentStreamingId;
+          if (_sid) this.updateMessage(_sid, { content: fullReply });
+          this.updateStreamingBubble(fullReply);
           if (typeof console !== 'undefined' && console.log) console.log('[WhisperLeaf] SSE done, reply_len=', fullReply.length);
           this.stopWatchdog();
           this.stopGenerationFeedback();
@@ -2155,6 +2243,7 @@ const ChatController = {
           }
           return;
         } else if (event === 'error') {
+          if (pendingRaf) { cancelAnimationFrame(pendingRaf); pendingRaf = null; }
           if (typeof console !== 'undefined' && console.warn) console.warn('[WhisperLeaf] SSE error:', (data || '').trim() || 'Error');
           this.stopWatchdog();
           this.stopGenerationFeedback();
@@ -2179,11 +2268,10 @@ const ChatController = {
           fullReply += data;
           if (isActiveStream()) {
             this.setSendingState(false);
-            const sid = this.state.currentStreamingId;
-            if (sid) this.updateMessage(sid, { content: fullReply });
-            this.updateStreamingBubble(fullReply);
+            scheduleStreamUpdate();
           }
         } else if (event === 'done') {
+          if (pendingRaf) { cancelAnimationFrame(pendingRaf); pendingRaf = null; }
           this.stopWatchdog();
           this.stopGenerationFeedback();
           if (isActiveStream()) {
@@ -2192,6 +2280,7 @@ const ChatController = {
           }
           return;
         } else if (event === 'error') {
+          if (pendingRaf) { cancelAnimationFrame(pendingRaf); pendingRaf = null; }
           this.stopWatchdog();
           this.stopGenerationFeedback();
           if (isActiveStream()) {
@@ -2280,7 +2369,6 @@ const ChatController = {
           message: text,
           history: this.getHistoryForApi(),
           session_id: this.state.sessionId,
-          model: this.state.selectedModel,
         }),
         signal: abortController.signal,
       });
