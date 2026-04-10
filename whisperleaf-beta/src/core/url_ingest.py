@@ -6,11 +6,36 @@ No background calls; no analytics. Dedup keys are stored only in the local index
 from __future__ import annotations
 
 import re
+import ssl
 from html import unescape
 from typing import Tuple
 from urllib.parse import urlparse, urlunparse
 
 import httpx
+
+
+def _build_ssl_context() -> ssl.SSLContext:
+    """
+    Build an SSL context that trusts both certifi's CA bundle and the
+    Windows system certificate store (handles corporate/antivirus MITM certs).
+    Falls back to default verification if neither is available.
+    """
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+        ctx.load_verify_locations(certifi.where())
+    except Exception:
+        pass
+    try:
+        for store in ("ROOT", "CA"):
+            for cert, _, _ in ssl.enum_certificates(store):
+                try:
+                    ctx.load_verify_locations(cadata=ssl.DER_cert_to_PEM_cert(cert))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return ctx
 
 try:
     from bs4 import BeautifulSoup
@@ -203,6 +228,7 @@ async def fetch_url_text_async(url: str) -> Tuple[str, str]:
             timeout=DEFAULT_TIMEOUT,
             follow_redirects=True,
             max_redirects=5,
+            verify=_build_ssl_context(),
         ) as client:
             async with client.stream("GET", url.strip(), headers=headers) as response:
                 response.raise_for_status()

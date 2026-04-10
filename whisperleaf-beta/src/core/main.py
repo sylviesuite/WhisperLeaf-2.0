@@ -89,7 +89,7 @@ from .memory import (
     VISIBILITY_VALUES,
 )
 from .tools_registry import register_tool, list_tools, call_tool
-from .tools import tool_bus, register_memory_search_tool, register_docs_search_tool, register_system_status_tool
+from .tools import tool_bus, register_memory_search_tool, register_docs_search_tool, register_system_status_tool, register_web_fetch_tool
 from .watch_folder_service import WatchFolderController
 
 # -------------------------------------------------------------------
@@ -430,6 +430,7 @@ document_processor = DocumentProcessor()
 DOCUMENTS_DIR = DATA_DIR / "documents"
 DOCUMENTS_INDEX_PATH = DOCUMENTS_DIR / "index.json"
 register_docs_search_tool(vector_store)
+register_web_fetch_tool()
 register_system_status_tool(
     model_name=model_client.model_name,
     get_memory_count=get_memory_count,
@@ -925,6 +926,58 @@ async def _build_memory_context(user_message: str, query: str, limit: int = MEMO
     return (block, snippets_injected)
 
 
+async def _build_web_context(url_or_query: str, is_url: bool) -> str:
+    """
+    Fetch a URL or run a DuckDuckGo search and return a context block string.
+    Returns "" on failure (never raises).
+    """
+    try:
+        payload = {"url": url_or_query} if is_url else {"query": url_or_query}
+        result = await tool_bus.execute("web.fetch", payload, context={})
+        if not result.ok or not result.data:
+            return ""
+        data = result.data
+        text = (data.get("text") or "").strip()
+        title = (data.get("title") or url_or_query).strip()
+        is_search = data.get("is_search", False)
+        if not text:
+            return ""
+        header = "WEB SEARCH RESULTS:" if is_search else f"WEB PAGE — {title}:"
+        return f"{header}\n\n{text}"
+    except Exception as e:
+        print("[WhisperLeaf web.fetch] failed (continuing without): %s" % e)
+        return ""
+
+
+# Regex to detect bare URLs anywhere in a message
+_URL_RE = re.compile(r"https?://[^\s\"'>]{4,}", re.IGNORECASE)
+
+
+def _extract_web_trigger(message: str):
+    """
+    Return (url_or_query, is_url) if the message triggers a web fetch, else (None, False).
+    Triggers:
+      - "/web <url-or-query>" explicit command (prefix stripped)
+      - A bare http(s) URL anywhere in the message (no prefix needed)
+    """
+    stripped = message.strip()
+
+    # Explicit /web command
+    if stripped.lower().startswith("/web "):
+        rest = stripped[5:].strip()
+        if not rest:
+            return None, False
+        is_url = bool(_URL_RE.match(rest))
+        return rest, is_url
+
+    # Auto-detect bare URL in message
+    m = _URL_RE.search(stripped)
+    if m:
+        return m.group(0).rstrip(".,;)\"'"), True
+
+    return None, False
+
+
 async def _build_docs_context(query: str, limit: int = 5):
     """
     Build RELEVANT DOCUMENTS context block via docs.search.
@@ -1056,6 +1109,12 @@ async def chat_endpoint(payload: ChatRequest):
     # "no memory: ..." never stores; strip prefix and send rest to model
     no_memory = raw_message.lower().startswith("no memory:")
     message_for_model = raw_message[10:].strip() if no_memory else raw_message
+
+    # "/web <url-or-query>" or bare URL → fetch now, strip /web prefix if present
+    _web_target, _web_is_url = _extract_web_trigger(message_for_model)
+    if message_for_model.strip().lower().startswith("/web "):
+        message_for_model = message_for_model.strip()[5:].strip()
+
     manual_mode_override, message_for_model = parse_mode_override(message_for_model)
 
     def detect_simple_query(user_message: str) -> bool:
@@ -1490,6 +1549,11 @@ async def chat_endpoint(payload: ChatRequest):
     except Exception as e:
         print("[WhisperLeaf chat] docs context failed (continuing without): %s" % e)
 
+    web_block = ""
+    if _web_target:
+        print("[WhisperLeaf web.fetch] target=%r is_url=%s" % (_web_target[:80], _web_is_url))
+        web_block = await _build_web_context(_web_target, _web_is_url)
+
     def detect_user_context_signals(injected_memory_snippets: List[str]) -> Dict[str, Any]:
         """
         Extract soft preference signals from injected memory/doc context.
@@ -1887,7 +1951,7 @@ async def chat_endpoint(payload: ChatRequest):
             "asks about WhisperLeaf's codebase or system design."
         )
 
-    if memory_block or doc_block:
+    if memory_block or doc_block or web_block:
         note = "Note: You may use the context below to answer.\n\n"
         parts = [note]
         if pivot_response_guidance:
@@ -1914,6 +1978,8 @@ async def chat_endpoint(payload: ChatRequest):
             parts.append(memory_block)
         if doc_block:
             parts.append(doc_block)
+        if web_block:
+            parts.append(web_block)
         user_content = "\n\n".join(parts) + "\n\nUser message:\n" + message_for_model
     else:
         if pivot_response_guidance or response_style_guidance:
