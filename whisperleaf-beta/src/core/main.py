@@ -2052,7 +2052,7 @@ async def chat_endpoint(payload: ChatRequest):
                 if e.response is not None and e.response.status_code == 404:
                     yield _sse_message(
                         "error",
-                        "Model not found. Install it in Ollama (e.g. ollama pull llama3.2) and try again.",
+                        "Model not found. Install it in Ollama (e.g. ollama pull llama3.2:latest) and try again.",
                     )
                 else:
                     yield _sse_message("error", "Local model error: %s" % (e,))
