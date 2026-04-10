@@ -9,6 +9,7 @@ watchdog>=3.0.0
 # Database
 sqlalchemy>=2.0.0
 # sqlite3 is stdlib, no pip install
+chromadb>=1.5.0
 
 # Encryption and Security and Security
 cryptography>=41.0.0
