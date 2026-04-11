@@ -166,6 +166,28 @@ def is_running():
         return False
 
 
+def _shell_folder(name):
+    """Read an actual Shell Folder path from the Windows registry.
+
+    This resolves the real Desktop / Start Menu path even when OneDrive
+    folder backup has moved them away from %USERPROFILE%.
+    Falls back to the environment-variable equivalent if the key is missing.
+    """
+    import winreg
+    key = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+    fallbacks = {
+        "Desktop":    pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")) / "Desktop",
+        "Programs":   pathlib.Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+    }
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            value, _ = winreg.QueryValueEx(k, name)
+            return pathlib.Path(value)
+    except Exception as exc:
+        log(f"Warning: registry lookup for '{name}' failed ({exc}), using fallback")
+        return fallbacks.get(name, pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")))
+
+
 def create_shortcuts(app_dir):
     """Create a Desktop shortcut and Start Menu entry for WhisperLeaf."""
     bat = app_dir / "Start WhisperLeaf.bat"
@@ -173,11 +195,8 @@ def create_shortcuts(app_dir):
         log(f"Skipping shortcuts — {bat} not found")
         return
 
-    desktop = pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")) / "Desktop"
-    start_menu = (
-        pathlib.Path(os.environ.get("APPDATA", ""))
-        / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-    )
+    desktop    = _shell_folder("Desktop")
+    start_menu = _shell_folder("Programs")
 
     lnk_desktop    = desktop    / "WhisperLeaf.lnk"
     lnk_start_menu = start_menu / "WhisperLeaf.lnk"
