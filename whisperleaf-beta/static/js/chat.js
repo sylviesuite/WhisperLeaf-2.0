@@ -80,6 +80,7 @@ const ChatController = {
     this.els.chatWindow = document.getElementById('chatWindow'); // messages-inner: append target
     this.els.messageInput = document.getElementById('messageInput');
     this.els.sendBtn = document.getElementById('sendBtn');
+    this.els.searchWebBtn = document.getElementById('searchWebBtn');
     this.els.newSessionBtn = document.getElementById('newSessionBtn');
     this.els.clearBtn = document.getElementById('clearBtn');
     this.els.chatForm = document.getElementById('chatForm');
@@ -1060,6 +1061,21 @@ const ChatController = {
       });
     }
 
+    const { searchWebBtn } = this.els;
+    if (searchWebBtn) {
+      searchWebBtn.addEventListener('click', () => {
+        if (this.state.isSending) return;
+        const input = this.els.messageInput;
+        if (!input) return;
+        const text = input.value.trim();
+        // If already prefixed, send as-is; otherwise prepend /web
+        if (!text.toLowerCase().startsWith('/web ')) {
+          input.value = '/web ' + text;
+        }
+        this.sendMessage();
+      });
+    }
+
     if (chatForm) {
       const composeFoot = chatForm.closest('.chat-compose-foot');
       chatForm.addEventListener('submit', (e) => {
@@ -1321,6 +1337,7 @@ const ChatController = {
   setSendingState(sending) {
     this.state.isSending = sending;
     if (this.els.sendBtn) this.els.sendBtn.disabled = sending;
+    if (this.els.searchWebBtn) this.els.searchWebBtn.disabled = sending;
   },
 
   // --- Watchdog (total time from send until stream done/error; local models can be slow on first run)

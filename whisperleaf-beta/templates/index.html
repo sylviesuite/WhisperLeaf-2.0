@@ -89,6 +89,26 @@ p {
   font-size: 0.95rem;
 }
 
+.btn-download {
+  display: inline-block;
+  margin-top: 1.1rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #238636, #2ea043);
+  border: 1px solid rgba(46, 160, 67, 0.9);
+  color: #f0f6fc;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background 0.16s ease, transform 0.1s ease;
+}
+
+.btn-download:hover {
+  background: linear-gradient(135deg, #2ea043, #3fb950);
+  transform: translateY(-1px);
+}
+
 .landing-nav {
   margin-top: 1.25rem;
 }
@@ -119,6 +139,7 @@ p {
 
 <h1>WhisperLeaf</h1>
 <p>A private AI workspace that runs entirely on your device—no cloud, no tracking, no compromises.</p>
+<a href="/landing#download" class="btn-download">Download Beta</a>
 <nav class="landing-nav" aria-label="WhisperLeaf navigation">
   <a href="/transparency">Transparency</a>
 </nav>
