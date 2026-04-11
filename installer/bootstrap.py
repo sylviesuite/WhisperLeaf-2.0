@@ -166,6 +166,65 @@ def is_running():
         return False
 
 
+def create_shortcuts(app_dir):
+    """Create a Desktop shortcut and Start Menu entry for WhisperLeaf."""
+    bat = app_dir / "Start WhisperLeaf.bat"
+    if not bat.exists():
+        log(f"Skipping shortcuts — {bat} not found")
+        return
+
+    desktop = pathlib.Path(os.environ.get("USERPROFILE", "C:/Users/Public")) / "Desktop"
+    start_menu = (
+        pathlib.Path(os.environ.get("APPDATA", ""))
+        / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+    )
+
+    lnk_desktop    = desktop    / "WhisperLeaf.lnk"
+    lnk_start_menu = start_menu / "WhisperLeaf.lnk"
+
+    # Use the bundled favicon.ico if available; fall back to no custom icon.
+    icon_path = resource("favicon.ico")
+    icon_line = f'$sc.IconLocation = "{icon_path}"' if icon_path.exists() else ""
+
+    def shortcut_block(var, lnk):
+        lines = [
+            f'${var} = $ws.CreateShortcut("{lnk}")',
+            f'${var}.TargetPath = "{bat}"',
+            f'${var}.WorkingDirectory = "{app_dir}"',
+            f'${var}.WindowStyle = 1',
+            f'${var}.Description = "WhisperLeaf - Private Local AI"',
+        ]
+        if icon_line:
+            lines.append(icon_line.replace("$sc.", f"${var}."))
+        lines.append(f'${var}.Save()')
+        return "\n".join(lines)
+
+    ps_script = (
+        "$ws = New-Object -ComObject WScript.Shell\n"
+        + shortcut_block("sc1", lnk_desktop) + "\n"
+        + shortcut_block("sc2", lnk_start_menu) + "\n"
+    )
+
+    tmp_ps = pathlib.Path(os.environ.get("TEMP", str(app_dir))) / "wl_shortcuts.ps1"
+    try:
+        tmp_ps.write_text(ps_script, encoding="utf-8-sig")
+        r = run([
+            "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", str(tmp_ps),
+        ])
+        if r.returncode == 0:
+            log(f"Shortcuts created: {lnk_desktop}, {lnk_start_menu}")
+        else:
+            log(f"Warning: shortcut creation exited {r.returncode}")
+    except Exception as exc:
+        log(f"Warning: could not create shortcuts: {exc}")
+    finally:
+        try:
+            tmp_ps.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 # ── Installation logic ────────────────────────────────────────────────────────
 
 def install(update_step, update_status, update_progress, done_cb, error_cb):
@@ -219,6 +278,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                     cwd=str(APP_DIR),
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
+            create_shortcuts(APP_DIR)
             time.sleep(4)
             webbrowser.open(f"http://127.0.0.1:{APP_PORT}/chat")
             update_step("launch", "done")
@@ -297,6 +357,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                 update_progress(pct)
         log(f"Extracted to: {APP_DIR}")
         update_status("WhisperLeaf files installed.")
+        create_shortcuts(APP_DIR)
         update_step("app", "done")
         update_progress(76)
 
