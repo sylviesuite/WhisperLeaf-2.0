@@ -24,6 +24,8 @@ if errorlevel 1 (
 REM ── Locate bundled assets ────────────────────────────────────────────────────
 set ZIP=..\whisperleaf-site\downloads\whisperleaf-beta.zip
 set OWL=..\whisperleaf-site\assets\images\owl.png
+set ICO=..\whisperleaf-site\favicon.ico
+set REQ=..\whisperleaf-beta\requirements.txt
 
 if not exist "%ZIP%" (
   echo  ERROR: App zip not found at %ZIP%
@@ -31,6 +33,10 @@ if not exist "%ZIP%" (
 )
 if not exist "%OWL%" (
   echo  ERROR: owl.png not found at %OWL%
+  pause & exit /b 1
+)
+if not exist "%ICO%" (
+  echo  ERROR: favicon.ico not found at %ICO%
   pause & exit /b 1
 )
 
@@ -42,7 +48,9 @@ python -m PyInstaller ^
   --name "WhisperLeafInstaller" ^
   --add-data "%ZIP%;." ^
   --add-data "%OWL%;." ^
-  --icon "%OWL%" ^
+  --add-data "%ICO%;." ^
+  --add-data "%REQ%;." ^
+  --icon "%ICO%" ^
   --clean ^
   bootstrap.py
 
