@@ -250,6 +250,7 @@ def install(update_step, update_status, update_progress, done_cb, error_cb):
                 update_step(key, "done")
             update_progress(100)
             update_status("WhisperLeaf is already running — opening in your browser…")
+            create_shortcuts(APP_DIR)
             webbrowser.open(f"http://127.0.0.1:{APP_PORT}/chat")
             done_cb()
             return
