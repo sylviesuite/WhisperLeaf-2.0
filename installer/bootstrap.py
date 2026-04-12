@@ -201,9 +201,20 @@ def create_shortcuts(app_dir):
     lnk_desktop    = desktop    / "WhisperLeaf.lnk"
     lnk_start_menu = start_menu / "WhisperLeaf.lnk"
 
-    # Use the bundled favicon.ico if available; fall back to no custom icon.
-    icon_path = resource("favicon.ico")
-    icon_line = f'$sc.IconLocation = "{icon_path}"' if icon_path.exists() else ""
+    # Copy favicon.ico into the permanent install dir so the shortcut icon
+    # survives after the PyInstaller temp folder is cleaned up.
+    bundled_ico = resource("favicon.ico")
+    permanent_ico = INSTALL_DIR / "favicon.ico"
+    if bundled_ico.exists():
+        try:
+            INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(bundled_ico), str(permanent_ico))
+            log(f"Copied favicon.ico to {permanent_ico}")
+        except Exception as exc:
+            log(f"Warning: could not copy favicon.ico ({exc})")
+            permanent_ico = bundled_ico  # fall back to temp path
+
+    icon_line = f'$sc.IconLocation = "{permanent_ico}"' if permanent_ico.exists() else ""
 
     def shortcut_block(var, lnk):
         lines = [
