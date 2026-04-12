@@ -948,6 +948,10 @@
       color: #8b949e;
     }
 
+    .download-smartscreen-note {
+      margin-top: 0.75rem !important;
+    }
+
     .download-reqs {
       text-align: left;
       margin-bottom: 1.75rem;
