@@ -113,6 +113,36 @@ app.add_middleware(
 # Developer Mode (global): when True, internal codebase details may be discussed without an explicit user ask.
 DEVELOPER_MODE: bool = False
 
+# -------------------------------------------------------------------
+# App version + settings persistence
+# -------------------------------------------------------------------
+
+APP_VERSION = "1.0.0"
+SETTINGS_PATH = DATA_DIR / "settings.json"
+
+def _load_settings() -> dict:
+    try:
+        if SETTINGS_PATH.exists():
+            import json as _json
+            return _json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+def _save_settings(data: dict) -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        import json as _json
+        SETTINGS_PATH.write_text(_json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as exc:
+        print(f"[WhisperLeaf] Could not save settings: {exc}")
+
+_settings = _load_settings()
+UPDATE_CHECK_ENABLED: bool = _settings.get("update_check_enabled", True)
+
+# Cached result of the last update check — populated by the startup background task.
+_update_cache: dict = {"available": False, "version": None, "url": None}
+
 # Backend uptime for system.status
 _APP_START_TIME = time.time()
 
@@ -507,6 +537,44 @@ async def startup_event() -> None:
 @app.on_event("startup")
 async def startup_model_health_check():
     await _check_model_health()
+
+
+# -------------------------------------------------------------------
+# Update check (non-blocking background task)
+# -------------------------------------------------------------------
+
+VERSION_CHECK_URL = "https://whisperleaf.ai/version.json"
+
+def _parse_version(v: str):
+    """Return a tuple of ints for simple semver comparison."""
+    try:
+        return tuple(int(x) for x in v.strip().split("."))
+    except Exception:
+        return (0,)
+
+async def _check_for_update() -> None:
+    global _update_cache
+    if not UPDATE_CHECK_ENABLED:
+        return
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(VERSION_CHECK_URL)
+            resp.raise_for_status()
+            data = resp.json()
+        remote_version = data.get("version", "0")
+        remote_url = data.get("url", "https://whisperleaf.ai/download")
+        if _parse_version(remote_version) > _parse_version(APP_VERSION):
+            _update_cache = {"available": True, "version": remote_version, "url": remote_url}
+            print(f"[WhisperLeaf] Update available: {remote_version} (current {APP_VERSION})")
+        else:
+            _update_cache = {"available": False, "version": remote_version, "url": remote_url}
+    except Exception as exc:
+        print(f"[WhisperLeaf] Update check skipped: {exc}")
+
+@app.on_event("startup")
+async def startup_update_check():
+    asyncio.create_task(_check_for_update())
 
 
 # -------------------------------------------------------------------
@@ -2172,6 +2240,37 @@ def set_dev_mode(body: DevModeBody):
     global DEVELOPER_MODE
     DEVELOPER_MODE = body.enabled
     return {"developer_mode": DEVELOPER_MODE}
+
+
+# -------------------------------------------------------------------
+# Update check API
+# -------------------------------------------------------------------
+
+@app.get("/api/update-available")
+def api_update_available():
+    """Returns the cached result of the startup update check."""
+    if not UPDATE_CHECK_ENABLED:
+        return {"available": False, "version": None, "url": None}
+    return _update_cache
+
+
+class UpdateCheckBody(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/settings/update-check")
+def get_update_check():
+    return {"update_check_enabled": UPDATE_CHECK_ENABLED}
+
+
+@app.post("/api/settings/update-check")
+def set_update_check(body: UpdateCheckBody):
+    global UPDATE_CHECK_ENABLED
+    UPDATE_CHECK_ENABLED = body.enabled
+    s = _load_settings()
+    s["update_check_enabled"] = body.enabled
+    _save_settings(s)
+    return {"update_check_enabled": UPDATE_CHECK_ENABLED}
 
 
 # -------------------------------------------------------------------

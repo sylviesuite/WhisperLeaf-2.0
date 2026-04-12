@@ -1386,6 +1386,34 @@
     .model-unavailable-banner.hidden {
       display: none;
     }
+    .update-banner {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.84rem;
+      color: #c9d1d9;
+      background: rgba(56, 139, 253, 0.08);
+      border: 1px solid rgba(56, 139, 253, 0.25);
+      border-radius: 8px;
+      padding: 0.55rem 0.85rem;
+      margin: 0.5rem 1.25rem 0;
+    }
+    .update-banner.hidden { display: none; }
+    .update-banner a { color: #58a6ff; text-decoration: none; }
+    .update-banner a:hover { text-decoration: underline; }
+    .update-banner-dismiss {
+      background: none;
+      border: none;
+      color: #6e7681;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 0.1rem;
+      flex-shrink: 0;
+    }
+    .update-banner-dismiss:hover { color: #c9d1d9; }
 
     .model-unavailable-title {
       margin: 0 0 0.5rem 0;
@@ -3538,6 +3566,10 @@
             </div>
             <button type="button" id="onboardingStartBtn" class="btn onboarding-start-btn">Start Chatting</button>
           </div>
+          <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
+            <span>A new version of WhisperLeaf is available — <a id="updateBannerLink" href="https://whisperleaf.ai/download" target="_blank" rel="noopener noreferrer">download it at whisperleaf.ai</a></span>
+            <button type="button" class="update-banner-dismiss" id="updateBannerDismiss" aria-label="Dismiss update notice">&times;</button>
+          </div>
           <div class="chat-hints visible" id="chatHints" aria-hidden="false">
             <div class="starter-panel" id="starterPanel">
               <div id="firstRunOrientation" class="first-run-orientation hidden" aria-label="Getting started">
@@ -3738,6 +3770,13 @@
     </label>
     <p id="devModeNote" class="settings-note">
       Allows WhisperLeaf to discuss internal codebase and architecture details.
+    </p>
+    <label class="toggle-row">
+      <span>Check for updates</span>
+      <input type="checkbox" id="updateCheckToggle" aria-describedby="updateCheckNote" />
+    </label>
+    <p id="updateCheckNote" class="settings-note">
+      On startup, WhisperLeaf checks whisperleaf.ai for a newer version and shows a notice if one is available. No usage data is sent.
     </p>
     <button type="button" id="closeSettings" class="btn-close-settings">Close</button>
   </div>

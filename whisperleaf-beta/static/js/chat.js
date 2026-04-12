@@ -45,6 +45,7 @@ const ChatController = {
     this.initState();
     this.bindEvents();
     this.loadModelStatus();
+    this.checkForUpdate();
     this.loadSessionHistory();
     this.loadSavedMemories();
     this.loadDocuments();
@@ -133,8 +134,12 @@ const ChatController = {
     this.els.settingsBtn = document.getElementById('settingsBtn');
     this.els.settingsModal = document.getElementById('settingsModal');
     this.els.devModeToggle = document.getElementById('devModeToggle');
+    this.els.updateCheckToggle = document.getElementById('updateCheckToggle');
     this.els.closeSettings = document.getElementById('closeSettings');
     this.els.devModeBadge = document.getElementById('devModeBadge');
+    this.els.updateBanner = document.getElementById('updateBanner');
+    this.els.updateBannerLink = document.getElementById('updateBannerLink');
+    this.els.updateBannerDismiss = document.getElementById('updateBannerDismiss');
     this.els.watchFolderPathInput = document.getElementById('watchFolderPathInput');
     this.els.watchFolderBrowseBtn = document.getElementById('watchFolderBrowseBtn');
     this.els.watchFolderStartBtn = document.getElementById('watchFolderStartBtn');
@@ -174,6 +179,22 @@ const ChatController = {
       this.state.modelStatus = 'unavailable';
       this.updateModelStatusUI();
     }
+  },
+
+  async checkForUpdate() {
+    try {
+      const res = await fetch('/api/update-available');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.available) return;
+      const banner = this.els.updateBanner;
+      const link = this.els.updateBannerLink;
+      if (!banner) return;
+      if (data.url && link) link.href = data.url;
+      banner.classList.remove('hidden');
+      const dismiss = this.els.updateBannerDismiss;
+      if (dismiss) dismiss.addEventListener('click', () => banner.classList.add('hidden'), { once: true });
+    } catch (_) { /* network unavailable — silently skip */ }
   },
 
   updateModelStatusUI() {
@@ -1168,6 +1189,7 @@ const ChatController = {
     const { settingsBtn, settingsModal, closeSettings, devModeToggle } = this.els;
     if (settingsBtn && settingsModal) {
       settingsBtn.addEventListener('click', () => {
+        this.loadSettings();
         settingsModal.classList.remove('hidden');
       });
     }
@@ -1179,6 +1201,12 @@ const ChatController = {
     if (devModeToggle) {
       devModeToggle.addEventListener('change', (e) => {
         this.setDevMode(!!e.target.checked);
+      });
+    }
+    const { updateCheckToggle } = this.els;
+    if (updateCheckToggle) {
+      updateCheckToggle.addEventListener('change', (e) => {
+        this.setUpdateCheck(!!e.target.checked);
       });
     }
 
@@ -2424,6 +2452,49 @@ const ChatController = {
       if (!this.state.currentStreamingId) this.stopGenerationFeedback();
       this.setSendingState(false);
     }
+  },
+
+  async loadSettings() {
+    try {
+      const [dmRes, ucRes] = await Promise.all([
+        fetch('/api/dev-mode'),
+        fetch('/api/settings/update-check'),
+      ]);
+      if (dmRes.ok) {
+        const dm = await dmRes.json();
+        if (this.els.devModeToggle) this.els.devModeToggle.checked = !!dm.developer_mode;
+      }
+      if (ucRes.ok) {
+        const uc = await ucRes.json();
+        if (this.els.updateCheckToggle) this.els.updateCheckToggle.checked = !!uc.update_check_enabled;
+      }
+    } catch (_) {}
+  },
+
+  async setDevMode(enabled) {
+    try {
+      await fetch('/api/dev-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const badge = this.els.devModeBadge;
+      if (badge) badge.classList.toggle('hidden', !enabled);
+    } catch (_) {}
+  },
+
+  async setUpdateCheck(enabled) {
+    try {
+      await fetch('/api/settings/update-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      // If disabled, hide any visible update banner immediately.
+      if (!enabled && this.els.updateBanner) {
+        this.els.updateBanner.classList.add('hidden');
+      }
+    } catch (_) {}
   },
 };
 
