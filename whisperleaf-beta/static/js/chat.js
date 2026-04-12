@@ -162,6 +162,12 @@ const ChatController = {
     this.setSidebarCollapsed(collapsed);
     this.state.modelStatus = 'unknown';
     this.state.hasStartedChat = sessionStorage.getItem(WL_STARTED_CHAT_SESSION_KEY) === 'true';
+    // Show the onboarding welcome screen for first-time users.
+    // Returning users (ONBOARDING_KEY already set) go straight to chat.
+    try {
+      const seen = localStorage.getItem(this.ONBOARDING_KEY);
+      if (!seen) this.state.forceShowOnboarding = true;
+    } catch (_) {}
   },
 
   async loadModelStatus() {
