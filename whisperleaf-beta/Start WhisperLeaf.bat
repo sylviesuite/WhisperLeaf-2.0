@@ -55,11 +55,8 @@ if not exist ".venv\Scripts\activate.bat" (
 REM ── 3. Check for port conflict ────────────────────────────────────────────────
 netstat -ano | findstr /R /C:"127\.0\.0\.1:8000 .* LISTENING" >nul 2>&1
 if %errorlevel%==0 (
-  echo  Port 8000 is already in use.
-  echo  Please close the other WhisperLeaf window or free the port, then try again.
-  echo.
-  pause
-  exit /b 1
+  start "" "http://127.0.0.1:8000/chat"
+  exit /b 0
 )
 
 REM ── 4. Launch ────────────────────────────────────────────────────────────────
